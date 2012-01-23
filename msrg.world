@@ -1,0 +1,23 @@
+include "map.inc"
+
+paused 1
+
+window
+(
+  size [ 400.00 500.00 ]
+  center [ 0.0 0.0 ]
+  rotate [ 0 0 ]
+  scale 0.5
+
+  show_data 1
+)
+
+floorplan
+(
+  name "msrg"
+  pose [ 0 0 0 0 ]
+  size [ 250.0 800.0 10.0 ]
+  bitmap "msrg.png"
+)
+
+
