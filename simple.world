@@ -1,0 +1,15 @@
+include "kephera.inc"
+
+paused 0
+
+window(
+  size [ 500.00 500.00 ]
+  center [ 0.0 0.0 ]
+  rotate [ 0 0 ]
+  scale 80
+  show_data 1
+)
+
+kephera(
+  pose [ 0.0 0.0 0.0 45.0 ]
+)

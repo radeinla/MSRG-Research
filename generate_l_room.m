@@ -1,8 +1,8 @@
 function l_room = generate_l_room()
-    l_room = zeros(100, 100, 'uint8');
+    l_room = zeros(10, 10, 'uint8');
     l_room(:,:) = 255; % set all to white
-    l_room(1:5, :) = 0;
-    l_room(1:70,96:100) = 0;
-    l_room(:, 1:5) = 0;
-    l_room(31:70,41:60) = 0;
+    l_room(1, :) = 0;
+    l_room(1:7,10) = 0;
+    l_room(:, 1) = 0;
+    l_room(4:7,5:6) = 0;
 end
