@@ -23,5 +23,6 @@ floorplan
 
 kephera
 (
-  pose [ 0 0 0 0 ]
+  pose [ 0 0 0 90 ]
+  ctrl "simple_forward"
 )
