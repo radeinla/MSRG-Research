@@ -1,0 +1,16 @@
+paused 1
+
+window
+(
+  size [ 400.00 500.00 ]
+  center [ 0.0 0.0 ]
+  rotate [ 0 0 ]
+  scale 10
+
+  show_data 1
+)
+
+model(
+  name "a"
+  ctrl "dynamic2"
+)
