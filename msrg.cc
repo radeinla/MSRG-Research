@@ -12,7 +12,7 @@ typedef struct{
   int steps;
 } robot_t;
 
-int PositionUpdate( Model* mod, robot_t* robot );
+int PositionUpdate( ModelPosition* mod, robot_t* robot );
 int MSRGBotDetectorUpdate( ModelFiducial* mod, robot_t* robot );
 
 extern "C" int Init( Model* mod, CtrlArgs* args ){
@@ -26,10 +26,10 @@ extern "C" int Init( Model* mod, CtrlArgs* args ){
   robot->pos->Subscribe();
 
   robot->fiducial = (ModelFiducial*)robot->pos->GetUnusedModelOfType( "fiducial" );
-  robot->fiducial->AddCallback( Model::CB_UPDATE, (model_callback_t)MSRGBotDetectorUpdate, robot->fiducial );
+  robot->fiducial->AddCallback( Model::CB_UPDATE, (model_callback_t)MSRGBotDetectorUpdate, robot );
   robot->fiducial->Subscribe();
 
-//  robot->pos->SetXSpeed( cruisespeed );
+  robot->pos->SetXSpeed( -1*cruisespeed );
 //  robot->pos->SetTurnSpeed( 0 );
 
   puts("Finished initializing!");
@@ -38,26 +38,25 @@ extern "C" int Init( Model* mod, CtrlArgs* args ){
 
 int MSRGBotDetectorUpdate( ModelFiducial* mod, robot_t* robot ){
   std::vector<ModelFiducial::Fiducial>& fids = mod->GetFiducials();
-  World* world =  robot->pos->GetWorld();
+  World* world =  mod->GetWorld();
+
   for( unsigned int i = 0; i < fids.size(); i++ ){
     std::ostringstream name;
-    std::cout << "\n\nfid: " << fids[i].id << "\n\n";
-//    name << "msrg" << fids[i].id;
-//    ModelPosition* robotInWifiZone = (ModelPosition*) world->GetModel(name.str());
-//    if (robotInWifiZone != NULL){
-//      puts("found a nearby robot");
-//    }
+    name << "msrg" << fids[i].id;
+    Model* model = world->GetModel(name.str());
+    if (model != NULL){
+      puts("Found a nearby robot");
+    }
   }
   return 0;
 }
 
-int PositionUpdate( Model* mod, robot_t* robot ){
-  if (robot->steps == 30){
+int PositionUpdate( ModelPosition* mod, robot_t* robot ){
+  if (robot->steps == 10){
     puts("Stopping...");
-    robot->pos->SetXSpeed( 0.0 );
+    mod->SetXSpeed( 0.0 );
     return 1;
   }
-  printf( "%d\n", robot->steps );
   robot->steps++;
   return 0;
 }
