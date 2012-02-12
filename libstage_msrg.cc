@@ -104,8 +104,18 @@ int main(int argc, char* argv[]){
 
 	WorldGui world(500, 400, "MSRG Simulation");
 	world.Load( "msrg.world" );
+
+	bool debug = false;
+
+
+	if (argc > 1){
+		std::string s(argv[1]);
+		if (s.compare("debug") == 0){
+			debug =true;
+		}
+	}
 	
-	MSRG msrg(popsize, true);
+	MSRG msrg(popsize, debug);
 	msrg.connect(&world);
 
 	world.Run();
