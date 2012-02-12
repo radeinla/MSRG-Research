@@ -15,4 +15,7 @@ define kephera position
     point[8] [ -0.06 -0.050 ]
     z [ 0 0.24 ]
   )
+
+  obstacle_return 1.0
+  ranger_return 1.0
 )

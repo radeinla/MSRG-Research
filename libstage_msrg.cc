@@ -10,7 +10,6 @@
 
 using namespace Stg;
 
-const int popsize = 2;
 const double WIFI_RANGE = 2.0;
 
 class Robot{
@@ -35,39 +34,39 @@ class MSRG{
 		}
 
 		//initializer
-		MSRG(unsigned int popsize, bool debug) : population_size(popsize), robots(new Robot[population_size]), debug(debug){
+		MSRG(bool debug) : debug(debug){
 			
-		}
-
-		//destructor
-		~MSRG(){
-			delete[] robots;
 		}
 
 		//connect to world bots
 		void connect(World* world){
-			std::cout << population_size << " robots should be in world\n";
-			//update all robots..
-			for (unsigned int idx = 0; idx < population_size; idx++){
+			for (unsigned int idx = 0; ; idx++){
 				std::stringstream name;
-				name << "msrg" << idx+1;
-				robots[idx].name = name.str();
+				name << "msrg" << idx;
+				
+				std::cout << name.str() << "\n";
 
-				ModelPosition* posmod = reinterpret_cast<ModelPosition*>(world->GetModel(robots[idx].name));
-				assert(posmod != 0);
+				if ((world->GetModel(name.str())) == NULL){
+					break;
+				}
 
-				robots[idx].position = posmod;
-				robots[idx].position->Subscribe();
+				ModelPosition* posmod = reinterpret_cast<ModelPosition*>(world->GetModel(name.str()));
 
+				Robot robot;
+
+				robot.name = name.str();
+				robot.position = posmod;
+				robot.position->Subscribe();
+				robots.push_back(robot);
 			}
 
 			world->AddUpdateCallback(MSRG::Callback, reinterpret_cast<void*>(this));
 		}
 
 		void ComputeWifiConnectivity(){
-			for (unsigned int i = 0; i < population_size; i++){
+			for (unsigned int i = 0; i < robots.size(); i++){
 				robots[i].robotsInWifiRange.clear();
-				for (unsigned int j = 0; j < population_size; j++){
+				for (unsigned int j = 0; j < robots.size(); j++){
 					if (j != i){
 						Pose iPose = robots[i].position->GetPose();
 						Pose jPose = robots[j].position->GetPose();
@@ -80,10 +79,10 @@ class MSRG{
 		}
 
 		void DebugInformation(){
-			for (unsigned int i = 0; i < population_size; i++){
+			for (unsigned int i = 0; i < robots.size(); i++){
 				std::cout << "Robot " << i << ":\nIn range: ";
 				for (std::vector<int>::iterator iter = robots[i].robotsInWifiRange.begin(); iter != robots[i].robotsInWifiRange.end(); ++iter){
-					std::cout << "msrg" << (*iter)+1 << ", ";
+					std::cout << "msrg" << *iter << ", ";
 				}
 				std::cout << "\n";
 			}
@@ -94,8 +93,7 @@ class MSRG{
 		}
 
 	protected:
-		unsigned int population_size;
-		Robot* robots;
+		std::vector<Robot> robots;
 		bool debug;
 };
 
@@ -114,8 +112,8 @@ int main(int argc, char* argv[]){
 			debug =true;
 		}
 	}
-	
-	MSRG msrg(popsize, debug);
+
+	MSRG msrg(debug);
 	msrg.connect(&world);
 
 	world.Run();
