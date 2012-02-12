@@ -13,7 +13,6 @@ define floorplan model
   gripper_return 0
   fiducial_return 0
   ranger_return 1.0
-
-  obstacle_return 0
+  obstacle_return 1
 )
 

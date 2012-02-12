@@ -21,30 +21,16 @@ floorplan
   bitmap "msrg.png"
 )
 
-define kephera_msrg kephera
-(
-  fiducial
-  (
-    #can detect in 5.0 units
-    range_max  2.0
-    range_max_id 2.0
-    fov 360 #3.14159 #6.28318
-    ignore_zloc 1
-  )
-)
-
-kephera_msrg
+kephera
 (
   name "msrg1"
   pose [ 0 0 0 90 ]
-  ctrl "msrg"
-  fiducial_return 1
+#  ctrl "msrg"
 )
 
-kephera_msrg
+kephera
 (
   name "msrg2"
   pose [ 0 1.9 0 -90 ]
-  ctrl "msrg"
-  fiducial_return 2
+#  ctrl "msrg"
 )
