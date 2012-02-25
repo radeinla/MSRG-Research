@@ -10,15 +10,143 @@
 
 using namespace Stg;
 
+const double PI = 3.14159;
 const double WIFI_RANGE = 2.0;
+const double RADIAN_PER_DEGREE = 0.01745;
+const int READY = 0;
+const int START = 1;
+const int TURNING = 2;
+const int FINISHED_TURNING = 3;
+const int MOVING = 4;
+const int STORE_POSITION = 5;
+const int STOPPED = 6;
+
+double WorldAngle(double human_angle){
+	return human_angle*RADIAN_PER_DEGREE;
+}
+
+double HumanAngle(double world_angle){
+	return world_angle / RADIAN_PER_DEGREE;
+}
+
+double WorldAngle360(double angle){
+	return fmod(angle + WorldAngle(360), WorldAngle(360));
+}
+
+class SRGNode{
+	public:
+		SRGNode* parent;
+		std::vector <SRGNode*> children;
+		Pose pose;
+		std::vector <double> bearings;
+		std::vector <double> intensities;
+
+		SRGNode(SRGNode* parent, Pose pose) : parent(parent), pose(pose){
+		}
+};
 
 class Robot{
 	public:
 		std::string name;
 		ModelPosition* position;
 		std::vector <int> robotsInWifiRange;
+		SRGNode* srg;
+		SRGNode* current;
+		int state;
+		Velocity lastVelocity;
+		/*
+			Targets are global pose values.
+		*/
+		double targetX;
+		double targetY;
 
+		Robot() : srg(NULL), current(NULL), state(1){
+
+		}
+
+		void TurnToGlobalAngle(double globalAngle){
+			Pose currentPose = position->GetGlobalPose();
+			double angleToMove = fmod(globalAngle + WorldAngle(360)-WorldAngle360(currentPose.a), WorldAngle(360));
+			position->GoTo(0, 0, angleToMove);
+			state = TURNING;
+		}
+
+		void MoveForward(double distance){
+			position->GoTo(distance, 0, 0);
+			state = MOVING;
+		}
+
+		bool IsMovingForward(){
+			Velocity v = position->GetVelocity();
+			return !((fabs(lastVelocity.x) > fabs(v.x)  && fabs(v.x) <= 0.001));
+		}
+
+		void StopMoving(){
+			position->Stop();
+		}
+
+		void UpdateLastVelocity(){
+			lastVelocity = position->GetVelocity();
+		}
+
+		void UpdateRotationState(){
+			if (!IsRotating()){
+				StopMoving();
+				state = READY;
+			}
+		}
+
+		void UpdateMovingForwardState(){
+			if (!IsMovingForward()){
+				std::cout << "not moving anymore\n";
+				StopMoving();
+				state = STORE_POSITION;
+			}else{
+				std::cout << "still moving..\n";
+			}
+		}
+
+		bool IsRotating(){
+			Velocity v = position->GetVelocity();
+			return !(fabs(lastVelocity.a) > fabs(v.a)  && fabs(v.a) <= 0.01);
+		}
 };
+
+int PositionUpdate( ModelPosition* model, Robot* robot ){
+	if (robot->state == START || robot->state == STORE_POSITION){
+		Pose currentPose = robot->position->GetGlobalPose();
+		std::cout << "=================\n";
+		std::cout << currentPose.x << "\n";
+		std::cout << currentPose.y << "\n";
+		std::cout << currentPose.z << "\n";
+		std::cout << currentPose.a << "\n";
+		if (robot->current == NULL){
+			SRGNode* currentNode = new SRGNode(NULL, robot->position->GetPose());
+			robot->srg = currentNode;
+			robot->current = currentNode;
+		}else{
+			SRGNode* currentNode = new SRGNode(robot->current, robot->position->GetPose());
+			robot->current->children.push_back(currentNode);
+			robot->current = currentNode;
+		}
+	}
+
+	if (robot->state == READY){
+		robot->MoveForward(2.0);
+	}else if (robot->state == START){
+		robot->MoveForward(3.0);
+	}else if (robot->state == TURNING){
+		robot->UpdateRotationState();
+	}else if (robot->state == MOVING){
+		robot->UpdateMovingForwardState();
+	}else if (robot->state == STORE_POSITION){
+		robot->state = STOPPED;
+	}
+
+	robot->UpdateLastVelocity();
+
+	return 0;
+}
 
 class MSRG{
 	public:
@@ -26,10 +154,10 @@ class MSRG{
 		static int Callback(World* world, void* userarg){
 			MSRG* msrg = reinterpret_cast<MSRG*>(userarg);
 			msrg->ComputeWifiConnectivity();
+			msrg->Tick(world);
 			if (msrg->debug){
 				msrg->DebugInformation();
 			}
-			msrg->Tick(world);
 			return 0;
 		}
 
@@ -52,26 +180,29 @@ class MSRG{
 
 				ModelPosition* posmod = reinterpret_cast<ModelPosition*>(world->GetModel(name.str()));
 
-				Robot robot;
-
-				robot.name = name.str();
-				robot.position = posmod;
-				robot.position->Subscribe();
+				Robot* robot = new Robot();
+				robot->name = name.str();
+				robot->position = posmod;
+				robot->position->AddCallback(Model::CB_UPDATE, (model_callback_t)PositionUpdate, robot);
+				robot->position->Subscribe();
+				robot->lastVelocity = robot->position->GetVelocity();
 				robots.push_back(robot);
 			}
+
+			std::cout << "asd\n";
 
 			world->AddUpdateCallback(MSRG::Callback, reinterpret_cast<void*>(this));
 		}
 
 		void ComputeWifiConnectivity(){
 			for (unsigned int i = 0; i < robots.size(); i++){
-				robots[i].robotsInWifiRange.clear();
+				robots[i]->robotsInWifiRange.clear();
 				for (unsigned int j = 0; j < robots.size(); j++){
 					if (j != i){
-						Pose iPose = robots[i].position->GetPose();
-						Pose jPose = robots[j].position->GetPose();
+						Pose iPose = robots[i]->position->GetPose();
+						Pose jPose = robots[j]->position->GetPose();
 						if (iPose.Distance2D(jPose) <= WIFI_RANGE){
-							robots[i].robotsInWifiRange.push_back(j);
+							robots[i]->robotsInWifiRange.push_back(j);
 						}
 					}
 				}
@@ -79,12 +210,24 @@ class MSRG{
 		}
 
 		void DebugInformation(){
-			for (unsigned int i = 0; i < robots.size(); i++){
-				std::cout << "Robot " << i << ":\nIn range: ";
-				for (std::vector<int>::iterator iter = robots[i].robotsInWifiRange.begin(); iter != robots[i].robotsInWifiRange.end(); ++iter){
-					std::cout << "msrg" << *iter << ", ";
+			if (robots[0]->state == STORE_POSITION){
+				for (unsigned int i = 0; i < robots.size(); i++){
+					std::cout << "Robot " << i << ":\nIn range: ";
+					for (std::vector<int>::iterator iter = robots[i]->robotsInWifiRange.begin(); iter != robots[i]->robotsInWifiRange.end(); ++iter){
+						std::cout << "msrg" << *iter << ", ";
+					}
+					std::cout << "\n";
+					std::cout << "SRG:\n";
+					SRGNode* current = robots[i]->srg;
+					while ( current != NULL){
+						std::cout << current->pose.x << ',' << current->pose.y << '\n';
+						if (current->children.size() == 0){
+							current = NULL;
+						}else{
+							current = current->children[0];
+						}
+					}
 				}
-				std::cout << "\n";
 			}
 		}
 
@@ -93,7 +236,7 @@ class MSRG{
 		}
 
 	protected:
-		std::vector<Robot> robots;
+		std::vector<Robot*> robots;
 		bool debug;
 };
 

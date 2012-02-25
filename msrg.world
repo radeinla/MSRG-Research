@@ -24,17 +24,18 @@ floorplan
 kephera
 (
   name "msrg0"
-  pose [ 4 17 0 180 ]
+#  pose [ 0 0 0 0 ]
+  pose [ 4 17 0 200 ]
 )
 
-kephera
-(
-  name "msrg1"
-  pose [ 3.5 17.3 0 -90 ]
-)
+#kephera
+#(
+#  name "msrg1"
+#  pose [ 3.5 17.3 0 180 ]
+#)
 
-kephera
-(
-  name "msrg2"
-  pose [ 4.2 18 0 -45 ]
-)
+#kephera
+#(
+#  name "msrg2"
+#  pose [ 4.2 18 0 180 ]
+#)
