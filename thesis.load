@@ -1,0 +1,15 @@
+export STG=/home/aldrineg/stg
+export LD_LIBRARY_PATH=$STG/lib:$LD_LIBRARY_PATH
+
+function compile_stage_so(){
+	g++ -shared -o$STG/lib/Stage-4.1/$1.so -I$STG/include/Stage-4.1/ -L$STG/lib -lstage $1.cc
+}
+
+function compile_libstage_exec(){
+	g++ -o$1 -I$STG/include/Stage-4.1/ -L$STG/lib -lstage $1.cc
+}
+
+function stage(){
+	$STG/bin/stage $1
+}
+
