@@ -40,15 +40,28 @@ class SRGNode{
 		Pose pose;
 		std::vector <double> bearings;
 		std::vector <double> intensities;
+		std::vector <meters_t> ranges;
 
 		SRGNode(SRGNode* parent, Pose pose) : parent(parent), pose(pose){
 		}
+
+		std::string ToString(){
+			std::stringstream ss;
+			ss << "(" << pose.x << "," << pose.y << ")\nReadings:\n";
+			for (unsigned int i = 0; i < bearings.size(); i++){
+				ss << bearings[i] << ":" << intensities[i] << ":" << ranges[i] << "\n";
+			}
+
+			return ss.str();
+		}
+
 };
 
 class Robot{
 	public:
 		std::string name;
 		ModelPosition* position;
+		ModelRanger* ranger;
 		std::vector <int> robotsInWifiRange;
 		SRGNode* srg;
 		SRGNode* current;
@@ -110,11 +123,22 @@ class Robot{
 			Velocity v = position->GetVelocity();
 			return !(fabs(lastVelocity.a) > fabs(v.a)  && fabs(v.a) <= 0.01);
 		}
+
 };
 
 int PositionUpdate( ModelPosition* model, Robot* robot ){
 	if (robot->state == START || robot->state == STORE_POSITION){
 		Pose currentPose = robot->position->GetGlobalPose();
+		std::vector <ModelRanger::Sensor> sensors = robot->ranger->GetSensorsMutable();
+		std::vector <double> bearings;
+		std::vector <double> intensities;
+		std::vector <meters_t> ranges;
+		
+		for (unsigned int i = 0; i < sensors.size(); i++){
+			bearings.push_back(sensors[i].bearings[0]);
+			intensities.push_back(sensors[i].intensities[0]);
+			ranges.push_back(sensors[i].ranges[0]);
+		}
 		std::cout << "=================\n";
 		std::cout << currentPose.x << "\n";
 		std::cout << currentPose.y << "\n";
@@ -122,19 +146,26 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 		std::cout << currentPose.a << "\n";
 		if (robot->current == NULL){
 			SRGNode* currentNode = new SRGNode(NULL, robot->position->GetPose());
+			currentNode->bearings = bearings;
+			currentNode->intensities = intensities;
+			currentNode->ranges = ranges;
 			robot->srg = currentNode;
 			robot->current = currentNode;
+			
 		}else{
 			SRGNode* currentNode = new SRGNode(robot->current, robot->position->GetPose());
+			currentNode->bearings = bearings;
+			currentNode->intensities = intensities;
+			currentNode->ranges = ranges;
 			robot->current->children.push_back(currentNode);
 			robot->current = currentNode;
 		}
 	}
 
 	if (robot->state == READY){
-		robot->MoveForward(2.0);
+//		robot->MoveForward(2.0);
 	}else if (robot->state == START){
-		robot->MoveForward(3.0);
+		robot->MoveForward(0.5);
 	}else if (robot->state == TURNING){
 		robot->UpdateRotationState();
 	}else if (robot->state == MOVING){
@@ -180,16 +211,18 @@ class MSRG{
 
 				ModelPosition* posmod = reinterpret_cast<ModelPosition*>(world->GetModel(name.str()));
 
+				ModelRanger* ranger = reinterpret_cast<ModelRanger*>(posmod->GetUnusedModelOfType( "ranger" ));
+
 				Robot* robot = new Robot();
 				robot->name = name.str();
 				robot->position = posmod;
 				robot->position->AddCallback(Model::CB_UPDATE, (model_callback_t)PositionUpdate, robot);
 				robot->position->Subscribe();
+				robot->ranger = ranger;
+				robot->ranger->Subscribe();
 				robot->lastVelocity = robot->position->GetVelocity();
 				robots.push_back(robot);
 			}
-
-			std::cout << "asd\n";
 
 			world->AddUpdateCallback(MSRG::Callback, reinterpret_cast<void*>(this));
 		}
@@ -210,7 +243,7 @@ class MSRG{
 		}
 
 		void DebugInformation(){
-			if (robots[0]->state == STORE_POSITION){
+			if (robots[0]->state == STOPPED){
 				for (unsigned int i = 0; i < robots.size(); i++){
 					std::cout << "Robot " << i << ":\nIn range: ";
 					for (std::vector<int>::iterator iter = robots[i]->robotsInWifiRange.begin(); iter != robots[i]->robotsInWifiRange.end(); ++iter){
@@ -220,7 +253,7 @@ class MSRG{
 					std::cout << "SRG:\n";
 					SRGNode* current = robots[i]->srg;
 					while ( current != NULL){
-						std::cout << current->pose.x << ',' << current->pose.y << '\n';
+						std::cout << current->ToString();
 						if (current->children.size() == 0){
 							current = NULL;
 						}else{
