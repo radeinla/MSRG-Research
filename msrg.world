@@ -31,11 +31,11 @@ kephera
 #kephera
 #(
 #  name "msrg1"
-#  pose [ 3.5 17.3 0 180 ]
+#  pose [ 3 18 0 180 ]
 #)
 
 #kephera
 #(
 #  name "msrg2"
-#  pose [ 4.2 18 0 180 ]
+#  pose [ 5 19 0 0 ]
 #)

@@ -41,28 +41,80 @@ define kephera_sensor_array_360 ranger
  # 16 transducers spread about the robot as follows
 #new mid sensor
  kephera_sensor( pose [ -0.04 0.130 0 90 ] )
+ kephera_sensor( pose [ -0.04 0.130 0 80 ] )
+ kephera_sensor( pose [ -0.04 0.130 0 100 ] )
 #added sensor
  kephera_sensor( pose [ 0.045 0.130 0 70 ] )
+ kephera_sensor( pose [ 0.045 0.130 0 60 ] )
+ kephera_sensor( pose [ 0.045 0.130 0 80 ] )
+
  kephera_sensor( pose [ 0.115 0.115 0 50 ] )
+ kephera_sensor( pose [ 0.115 0.115 0 40 ] )
+ kephera_sensor( pose [ 0.115 0.115 0 60 ] )
+
  kephera_sensor( pose [ 0.150 0.080 0 30 ] )
+ kephera_sensor( pose [ 0.150 0.080 0 40 ] )
+ kephera_sensor( pose [ 0.150 0.080 0 50 ] )
+
  kephera_sensor( pose [ 0.170 0.025 0 10 ] )
+ kephera_sensor( pose [ 0.170 0.025 0 0 ] )
+ kephera_sensor( pose [ 0.170 0.025 0 20 ] )
+
  kephera_sensor( pose [ 0.170 -0.025 0 -10 ] )
+ kephera_sensor( pose [ 0.170 -0.025 0 -20 ] )
+ kephera_sensor( pose [ 0.170 -0.025 0 0 ] )
+
  kephera_sensor( pose [ 0.150 -0.080 0 -30 ] )
+ kephera_sensor( pose [ 0.150 -0.080 0 -40 ] )
+ kephera_sensor( pose [ 0.150 -0.080 0 -20 ] )
+
  kephera_sensor( pose [ 0.115 -0.115 0 -50 ] )
+ kephera_sensor( pose [ 0.115 -0.115 0 -60 ] )
+ kephera_sensor( pose [ 0.115 -0.115 0 -40 ] )
+
 #added sensor
  kephera_sensor( pose [ 0.045 -0.130 0 -70 ] )
+ kephera_sensor( pose [ 0.045 -0.130 0 -80 ] )
+ kephera_sensor( pose [ 0.045 -0.130 0 -60 ] )
+
 #new mid sensor
  kephera_sensor( pose [ -0.04 -0.130 0 -90 ] )
+ kephera_sensor( pose [ -0.04 -0.130 0 -100 ] )
+ kephera_sensor( pose [ -0.04 -0.130 0 -80 ] )
+
 #moved sensor
  kephera_sensor( pose [ -0.145 -0.130 0 -110 ] )
+ kephera_sensor( pose [ -0.145 -0.130 0 -130 ] )
+ kephera_sensor( pose [ -0.145 -0.130 0 -120 ] )
+
  kephera_sensor( pose [ -0.195 -0.115 0 -130 ] )
+ kephera_sensor( pose [ -0.195 -0.115 0 -140 ] )
+ kephera_sensor( pose [ -0.195 -0.115 0 -150 ] )
+
  kephera_sensor( pose [ -0.230 -0.080 0 -150 ] )
+ kephera_sensor( pose [ -0.230 -0.080 0 -160 ] )
+ kephera_sensor( pose [ -0.230 -0.080 0 -140 ] )
+
  kephera_sensor( pose [ -0.250 -0.025 0 -170 ] )
+ kephera_sensor( pose [ -0.250 -0.025 0 -180 ] )
+ kephera_sensor( pose [ -0.250 -0.025 0 -160 ] )
+
  kephera_sensor( pose [ -0.250 0.025 0 170 ] )
+ kephera_sensor( pose [ -0.250 0.025 0 160 ] )
+ kephera_sensor( pose [ -0.250 0.025 0 180 ] )
+
  kephera_sensor( pose [ -0.230 0.080 0 150 ] )
+ kephera_sensor( pose [ -0.230 0.080 0 140 ] )
+ kephera_sensor( pose [ -0.230 0.080 0 160 ] )
+
  kephera_sensor( pose [ -0.195 0.115 0 130 ] )
+ kephera_sensor( pose [ -0.195 0.115 0 120 ] )
+ kephera_sensor( pose [ -0.195 0.115 0 140 ] )
+
 #moved sensor
  kephera_sensor( pose [ -0.145 0.130 0 110 ] )
+ kephera_sensor( pose [ -0.145 0.130 0 100 ] )
+ kephera_sensor( pose [ -0.145 0.130 0 120 ] )
 )
 
 define kephera position
