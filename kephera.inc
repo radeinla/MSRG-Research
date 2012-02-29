@@ -3,7 +3,7 @@ define kephera_sensor sensor
 (
   size [0.01 0.05 0.01 ]
   # define the range bounds [min max]
-  range [0 2.0]
+  range [0 1.0]
   # define the angular field of view in degrees
   fov 20
   # define the number of samples spread over the fov
