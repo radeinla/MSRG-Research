@@ -5,12 +5,14 @@
 #include <sstream>
 #include <iostream>
 #include <cmath>
+#include <time.h>
 
 #include "stage.hh"
 
 using namespace Stg;
 
 const double PI = 3.14159;
+const double TWO_PI = PI*2;
 const double RADIAN_PER_DEGREE = 0.01745;
 const double MOVING_FORWARD_EPSILON = 0.000000001;
 
@@ -18,6 +20,10 @@ const double MOVING_FORWARD_EPSILON = 0.000000001;
 const double Rp = 1.0;
 //Rc = communication range (must be a multiple of Rp)
 const double Rc = 3*Rp;
+
+const double ROBOT_MAP_RESOLUTION = 100;
+const int ROBOT_MAP_HEIGHT = (int)ceil(Rp*ROBOT_MAP_RESOLUTION);
+const int ROBOT_MAP_WIDTH = (int)ceil(Rp*ROBOT_MAP_RESOLUTION);
 
 //Robot states
 const int READY = 0;
@@ -27,7 +33,11 @@ const int MOVING = 3;
 const int STORE_POSITION = 4;
 const int STOPPED = 5;
 
-const long MAX_NODES = 10;
+const long MAX_NODES = 1;
+
+double sqr(double x){
+	return pow(x, 2);
+}
 
 double WorldAngle(double human_angle){
 	return human_angle*RADIAN_PER_DEGREE;
@@ -38,7 +48,36 @@ double HumanAngle(double world_angle){
 }
 
 double WorldAngle360(double angle){
-	return fmod(angle + WorldAngle(360), WorldAngle(360));
+	return fmod(angle + TWO_PI, TWO_PI);
+}
+
+//double frandom(){
+//	double randomDenom = random() * random();
+//	return (((double)random())/randomDenom)/randomDenom;
+//}
+
+//in radians..
+bool WolrdAngle360Between(double n, double a, double b) {
+        n = WorldAngle360(n);
+        a = WorldAngle360(a);
+        b = WorldAngle360(b);
+
+	if (a > b){
+		b = b + TWO_PI;
+	}
+
+        if (a < b)
+                return a <= n && n <= b;
+        return a <= n || n <= b;
+}
+
+bool InBetween(double n, double a, double b){
+	return n >= a && n <= b;
+}
+
+double distance(double x1, double y1, double x2, double y2){
+	double d = sqrt(sqr(x1-x2) + sqr(y1-y2));
+	return d;
 }
 
 class SRGNode{
@@ -46,24 +85,57 @@ class SRGNode{
 		SRGNode* parent;
 		std::vector <SRGNode*> children;
 		Pose pose;
+		double fov;
 		std::vector <double> bearings;
-		std::vector <double> intensities;
 		std::vector <meters_t> ranges;
+		double radius;
 
-		SRGNode(SRGNode* parent, Pose pose) : parent(parent), pose(pose){
+		bool inPerceptionRange(double globalX, double globalY){
+			double dist = distance(pose.x, pose.y, globalX, globalY);
+			std::cout << "distance from node: " << dist << "\n";
+			return dist >= 0 && dist <= Rp;
+		}
+
+		bool inLSR(double globalX, double globalY){
+			if (!inPerceptionRange(globalX, globalY)){
+				return false;
+			}
+			double localPose = WorldAngle360(atan2(globalY-pose.y, globalX-pose.x));
+			std::cout << "local pose: " << HumanAngle(localPose) << "\n";
+			for (unsigned int i = 0; i < bearings.size(); i++){
+				if (WolrdAngle360Between(localPose, bearings[i] - WorldAngle(fov/2), bearings[i] + WorldAngle(fov/2))){
+					if (!InBetween(distance(pose.x, pose.y, globalX, globalY), radius, ranges[i])){
+						return false;
+					}
+				}
+			}
+			return true;
+		}
+
+		bool inLRR(double globalX, double globalY){
+			if (!inLSR(globalX, globalY)){
+				return false;
+			}
+			return true;
+		}
+
+		bool inLF(double globalX, double globalY){
+			return true;
+		}
+
+		bool inLIR(double globalX, double globalY){
+			return true;
+		}
+
+		//radius is hard coded..
+		SRGNode(SRGNode* parent, Pose pose) : parent(parent), pose(pose), radius(0.075){
 		}
 
 		std::string ToString(){
 			std::stringstream ss;
-			ss << "(" << pose.x << "," << pose.y << ")\nReadings:\n";
-			for (unsigned int i = 0; i < bearings.size(); i+= 3){
-				double perception = ranges[i];
-				for (unsigned int j = 0; j < i + 3; j++){
-					if (ranges[j] < perception){
-						perception = ranges[j];
-					}
-				}
-				ss << HumanAngle(bearings[i]) << ":" << perception << "\n";
+			ss << "Node (" << pose.x << "," << pose.y << ")\nReadings:\n";
+			for (unsigned int i = 0; i < bearings.size(); i++){
+				ss << HumanAngle(bearings[i]) << ":" << ranges[i] << "\n";
 			}
 
 			return ss.str();
@@ -86,29 +158,31 @@ class Robot{
 
 		//Global Pose..
 		Pose targetPose;
-
 		Robot() : srg(NULL), current(NULL), state(STORE_POSITION), startup(true), nodes(0){
 
 		}
 
-/*		Pose GetTarget(){
-			
-		}*/
 
-		void TurnToGlobalAngle(double globalAngle){
+		void SetTarget(Pose target){
+			targetPose = target;
+		}
+
+
+		void TurnToGlobalAngle(){
 			Pose currentPose = position->GetGlobalPose();
 			Pose odom = Pose(0,0,0,0);
 			position->SetOdom(odom);
+			double globalAngle = atan2(targetPose.y-currentPose.y, targetPose.x-currentPose.x);
 			double angleToMove = fmod(globalAngle + WorldAngle(360)-WorldAngle360(currentPose.a), WorldAngle(360));
 			position->GoTo(0, 0, angleToMove);
 			state = TURNING;
 		}
 
-		void MoveForward(double distance){
+		void MoveForward(){
 			Pose currentPose = position->GetGlobalPose();
 			Pose odom = Pose(0,0,0,0);
 			position->SetOdom(odom);
-			position->GoTo(distance, 0, 0);
+			position->GoTo(distance(currentPose.x, currentPose.y, targetPose.x, targetPose.y), 0, 0);
 			state = MOVING;
 		}
 
@@ -128,17 +202,16 @@ class Robot{
 		void UpdateRotationState(){
 			if (!IsRotating()){
 				StopMoving();
-				state = READY;
+				MoveForward();
 			}
 		}
 
 		void UpdateMovingForwardState(){
 			if (!IsMovingForward()){
-				std::cout << "not moving anymore\n";
 				StopMoving();
 				state = STORE_POSITION;
 			}else{
-				std::cout << "still moving..\n";
+				//std::cout << "still moving..\n";
 			}
 		}
 
@@ -151,29 +224,41 @@ class Robot{
 
 int PositionUpdate( ModelPosition* model, Robot* robot ){
 	if (robot->state == STORE_POSITION){
+		std::cout << "storing position..\n";
 		Pose currentPose = robot->position->GetGlobalPose();
 		std::vector <ModelRanger::Sensor> sensors = robot->ranger->GetSensorsMutable();
 		std::vector <double> bearings;
-		std::vector <double> intensities;
 		std::vector <meters_t> ranges;
-		
-		for (unsigned int i = 0; i < sensors.size(); i++){
-			bearings.push_back(sensors[i].bearings[0]);
-			intensities.push_back(sensors[i].intensities[0]);
-			ranges.push_back(sensors[i].ranges[0]);
+	
+		for (unsigned int i = 0; i < sensors.size(); i+=3){
+			double perception = sensors[i].ranges[0];
+			for (unsigned int j = i; j < i + 3; j++){
+				if (sensors[j].ranges[0] < perception){
+					perception = sensors[j].ranges[0];
+				}
+			}
+			ranges.push_back(perception);
+			bearings.push_back(WorldAngle((i/3)*30));
 		}
+
+		sensors.clear();
+		
 		if (robot->current == NULL){
 			SRGNode* currentNode = new SRGNode(NULL, robot->position->GetPose());
 			currentNode->bearings = bearings;
-			currentNode->intensities = intensities;
 			currentNode->ranges = ranges;
+			currentNode->fov = 30;
+			std::cout << "in lsr: " << currentNode->inLSR(1.5, -0.5) << "\n";
+			std::cout << "in lsr: " << currentNode->inLSR(1.5, 0.5) << "\n";
 			robot->srg = currentNode;
 			robot->current = currentNode;
 		}else{
 			SRGNode* currentNode = new SRGNode(robot->current, robot->position->GetPose());
 			currentNode->bearings = bearings;
-			currentNode->intensities = intensities;
 			currentNode->ranges = ranges;
+			currentNode->fov = 30;
+			std::cout << "in lsr: " << currentNode->inLSR(1.5, -0.5) << "\n";
+			std::cout << "in lsr: " << currentNode->inLSR(1.5, 0.5) << "\n";
 			robot->current->children.push_back(currentNode);
 			robot->current = currentNode;
 		}
@@ -185,7 +270,9 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 			//what's next?
 			//dummy command..
 			if (robot->startup || robot-> nodes <= MAX_NODES){
-				robot->MoveForward(0.5);
+				//TODO: get a random configuration and set target..
+				robot->SetTarget(Pose(1,1,0,0));
+				robot->TurnToGlobalAngle();
 				robot->startup = false;
 			}else if (robot->nodes > MAX_NODES){
 				robot->state = STOPPED;
@@ -308,6 +395,8 @@ class MSRG{
 
 int main(int argc, char* argv[]){
 	Init( &argc, &argv);
+
+	srand( time(NULL) );
 
 	WorldGui world(500, 400, "MSRG Simulation");
 	world.Load( "msrg.world" );
