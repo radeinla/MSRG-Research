@@ -33,7 +33,7 @@ const int MOVING = 3;
 const int STORE_POSITION = 4;
 const int STOPPED = 5;
 
-const long MAX_NODES = 1;
+const long MAX_NODES = 5;
 
 double sqr(double x){
 	return pow(x, 2);
@@ -51,10 +51,13 @@ double WorldAngle360(double angle){
 	return fmod(angle + TWO_PI, TWO_PI);
 }
 
-//double frandom(){
-//	double randomDenom = random() * random();
-//	return (((double)random())/randomDenom)/randomDenom;
-//}
+double frandom(){
+	return ((double)rand()) / RAND_MAX;
+}
+
+double frandom(double min, double max){
+	return min + frandom()*(max-min);
+}
 
 //in radians..
 bool WolrdAngle360Between(double n, double a, double b) {
@@ -265,13 +268,19 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 		robot->nodes++;
 	}
 
+	double targetX = frandom(-1*Rp, Rp), targetY = frandom(-1*Rp, Rp);
+
 	switch(robot->state){
 		case READY:
 			//what's next?
 			//dummy command..
 			if (robot->startup || robot-> nodes <= MAX_NODES){
 				//TODO: get a random configuration and set target..
-				robot->SetTarget(Pose(1,1,0,0));
+				while (!robot->current->inLSR(robot->current->pose.x+targetX, robot->current->pose.y+targetY)){
+					targetX = frandom(-1*Rp, Rp);
+					targetY = frandom(-1*Rp, Rp);
+				}
+				robot->SetTarget(Pose(robot->current->pose.x+targetX,robot->current->pose.y+targetY,0,0));
 				robot->TurnToGlobalAngle();
 				robot->startup = false;
 			}else if (robot->nodes > MAX_NODES){
