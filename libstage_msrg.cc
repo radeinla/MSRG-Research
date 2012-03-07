@@ -8,8 +8,10 @@
 #include <time.h>
 
 #include "stage.hh"
+#include "CImg.h"
 
 using namespace Stg;
+using namespace cimg_library;
 
 const double PI = 3.14159;
 const double TWO_PI = PI*2;
@@ -22,8 +24,10 @@ const double Rp = 1.0;
 const double Rc = 3*Rp;
 
 const double ROBOT_MAP_RESOLUTION = 100;
-const int ROBOT_MAP_HEIGHT = (int)ceil(Rp*ROBOT_MAP_RESOLUTION*2);
-const int ROBOT_MAP_WIDTH = (int)ceil(Rp*ROBOT_MAP_RESOLUTION*2);
+const int ROBOT_MAP_HEIGHT = (int)ceil(Rp*ROBOT_MAP_RESOLUTION*2)+1;
+const int ROBOT_MAP_WIDTH = (int)ceil(Rp*ROBOT_MAP_RESOLUTION*2)+1;
+const int ROBOT_MAP_ORIGIN_X = ROBOT_MAP_WIDTH/2;
+const int ROBOT_MAP_ORIGIN_Y = ROBOT_MAP_HEIGHT/2;
 
 //Robot states
 const int READY = 0;
@@ -88,15 +92,15 @@ class SRGNode{
 		SRGNode* parent;
 		std::vector <SRGNode*> children;
 		Pose pose;
-		double fov;
+		std::vector <double> fov;
 		std::vector <double> bearings;
 		std::vector <meters_t> ranges;
 		double radius;
 		std::vector <std::vector<int> > mapData;
+		CImg <char> lsr;
 
 		bool inPerceptionRange(double globalX, double globalY){
 			double dist = distance(pose.x, pose.y, globalX, globalY);
-			//std::cout << "distance from node: " << dist << "\n";
 			return dist >= 0 && dist <= Rp;
 		}
 
@@ -105,10 +109,13 @@ class SRGNode{
 				return false;
 			}
 			double localPose = WorldAngle360(atan2(globalY-pose.y, globalX-pose.x));
-			//std::cout << "local pose: " << HumanAngle(localPose) << "\n";
 			for (unsigned int i = 0; i < bearings.size(); i++){
-				if (WolrdAngle360Between(localPose, bearings[i] - WorldAngle(fov/2), bearings[i] + WorldAngle(fov/2))){
-					if (!InBetween(distance(pose.x, pose.y, globalX, globalY), radius, ranges[i])){
+				double halfSpan = (fov[i]/2)+1;
+				double fromAngle360 = WorldAngle360(bearings[i]-WorldAngle(halfSpan));
+				double toAngle360 = WorldAngle360(bearings[i]+WorldAngle(halfSpan));
+				
+				if (WolrdAngle360Between(localPose, fromAngle360, toAngle360)){
+					if (!InBetween(distance(pose.x, pose.y, globalX, globalY), 0, ranges[i])){
 						return false;
 					}
 				}
@@ -132,19 +139,32 @@ class SRGNode{
 		}
 
 		//radius is hard coded..
-		SRGNode(SRGNode* parent, Pose pose) : parent(parent), pose(pose), radius(0.075){
+		SRGNode(SRGNode* parent, Pose pose) : parent(parent), pose(pose), radius(0.075), lsr(CImg <char>(ROBOT_MAP_HEIGHT, ROBOT_MAP_WIDTH)){
 		}
 
 		std::string ToString(){
 			std::stringstream ss;
 			ss << "Node (" << pose.x << "," << pose.y << ")\nReadings:\n";
 			for (unsigned int i = 0; i < bearings.size(); i++){
-				ss << HumanAngle(bearings[i]) << ":" << ranges[i] << "\n";
+				ss << HumanAngle(bearings[i]) << "[" << fov[i] << "]" << ":" << ranges[i] << "\n";
 			}
 
 			return ss.str();
 		}
 
+		void update_map_data(){
+			cimg_forXY(lsr,x,y){
+				double deltaX = ((double)x-ROBOT_MAP_ORIGIN_X)/ROBOT_MAP_RESOLUTION;
+				double deltaY = ((double)y-ROBOT_MAP_ORIGIN_Y)/ROBOT_MAP_RESOLUTION;
+				double globalX = pose.x + deltaX;
+				double globalY = pose.y - deltaY;
+				if (inLSR(globalX, globalY)){
+					lsr(x,y) = 255;
+				}else{
+					lsr(x,y) = 0;
+				}
+			}
+		}
 };
 
 class Robot{
@@ -159,11 +179,12 @@ class Robot{
 		SRGNode* current;
 		int state;
 		Velocity lastVelocity;
+		CImgDisplay disp;
 
 		//Global Pose..
 		Pose targetPose;
 		Robot() : srg(NULL), current(NULL), state(STORE_POSITION), startup(true), nodes(0){
-
+			disp.set_title(name.data());
 		}
 
 
@@ -226,29 +247,6 @@ class Robot{
 
 };
 
-std::vector<std::vector<int> > GetMapRepresentation(SRGNode* node){
-	std::vector<std::vector<int> > mapData;
-	//initialize data..
-	mapData.resize(ROBOT_MAP_HEIGHT);
-	for (int i = 0; i < ROBOT_MAP_HEIGHT; i++){
-		mapData[i].resize(ROBOT_MAP_WIDTH);
-	}
-	
-	for (int i = 0; i < ROBOT_MAP_HEIGHT; i++){
-		for (int j = 0; j < ROBOT_MAP_WIDTH; j++){
-			double deltaX = ((double)i-128)/100;
-			double deltaY = ((double)j-128)/100;
-			if (node->inLSR(node->pose.x+deltaX, node->pose.y+deltaY)){
-				mapData[i][j] = 255;
-			}else if (node->inPerceptionRange(node->pose.x+deltaX, node->pose.y+deltaY)){
-				mapData[i][j] = 0;
-			}else{
-				mapData[i][j] = -1;
-			}
-		}
-	}
-	return mapData;
-}
 
 int PositionUpdate( ModelPosition* model, Robot* robot ){
 	if (robot->state == STORE_POSITION){
@@ -257,6 +255,7 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 		std::vector <ModelRanger::Sensor> sensors = robot->ranger->GetSensorsMutable();
 		std::vector <double> bearings;
 		std::vector <meters_t> ranges;
+		std::vector <double> fov;
 	
 		for (unsigned int i = 0; i < sensors.size(); i+=3){
 			double perception = sensors[i].ranges[0];
@@ -266,32 +265,29 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 				}
 			}
 			ranges.push_back(perception);
-			bearings.push_back(WorldAngle((i/3)*30));
+			bearings.push_back(WorldAngle360(currentPose.a+sensors[i].pose.a));
+			fov.push_back(HumanAngle(sensors[i].fov));
 		}
 
-		sensors.clear();
-		
 		if (robot->current == NULL){
-			SRGNode* currentNode = new SRGNode(NULL, robot->position->GetPose());
+			SRGNode* currentNode = new SRGNode(NULL, currentPose);
 			currentNode->bearings = bearings;
 			currentNode->ranges = ranges;
-			currentNode->fov = 30;
-			currentNode->mapData = GetMapRepresentation(currentNode);
-			std::cout << "in lsr: " << currentNode->inLSR(1.5, -0.5) << "\n";
-			std::cout << "in lsr: " << currentNode->inLSR(1.5, 0.5) << "\n";
+			currentNode->fov = fov;
+			currentNode->lsr = (char)0;
+			currentNode->update_map_data();
 			robot->srg = currentNode;
 			robot->current = currentNode;
 		}else{
-			SRGNode* currentNode = new SRGNode(robot->current, robot->position->GetPose());
+			SRGNode* currentNode = new SRGNode(robot->current, currentPose);
 			currentNode->bearings = bearings;
 			currentNode->ranges = ranges;
-			currentNode->fov = 30;
-			currentNode->mapData = GetMapRepresentation(currentNode);
-			std::cout << "in lsr: " << currentNode->inLSR(1.5, -0.5) << "\n";
-			std::cout << "in lsr: " << currentNode->inLSR(1.5, 0.5) << "\n";
+			currentNode->fov = fov;
+			currentNode->update_map_data();
 			robot->current->children.push_back(currentNode);
 			robot->current = currentNode;
 		}
+//		robot->current->lsr.display(robot->disp, false);
 		robot->nodes++;
 	}
 
@@ -364,6 +360,7 @@ class MSRG{
 					break;
 				}
 
+
 				ModelPosition* posmod = reinterpret_cast<ModelPosition*>(world->GetModel(name.str()));
 
 				ModelRanger* ranger = reinterpret_cast<ModelRanger*>(posmod->GetUnusedModelOfType( "ranger" ));
@@ -376,6 +373,7 @@ class MSRG{
 				robot->ranger = ranger;
 				robot->ranger->Subscribe();
 				robot->lastVelocity = robot->position->GetVelocity();
+				robot->disp.show();
 				robots.push_back(robot);
 			}
 
