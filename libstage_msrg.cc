@@ -98,6 +98,18 @@ class SRGNode{
 		double radius;
 		std::vector <std::vector<int> > mapData;
 		CImg <char> lsr;
+		CImg <char> lrr;
+		CImg <char> robotCircular;
+
+		//radius is hard coded..
+		SRGNode(SRGNode* parent, Pose pose) : parent(parent), pose(pose), radius(0.075), lsr(CImg <char>(ROBOT_MAP_HEIGHT, ROBOT_MAP_WIDTH)), lrr(CImg <char>(ROBOT_MAP_HEIGHT, ROBOT_MAP_WIDTH)){
+			int robotCircularSize = floor(radius*2*ROBOT_MAP_RESOLUTION);
+			char color[] = {255};
+			robotCircular = CImg <char>(robotCircularSize, robotCircularSize);
+			robotCircular = (char)0;
+			robotCircular = robotCircular.draw_circle(robotCircularSize/2, robotCircularSize/2, robotCircularSize/2, color);
+		}
+
 
 		bool inPerceptionRange(double globalX, double globalY){
 			double dist = distance(pose.x, pose.y, globalX, globalY);
@@ -123,8 +135,21 @@ class SRGNode{
 			return true;
 		}
 
+		int toMapCoordinateX(double globalX){
+			return 0;
+		}
+
+		int toMapCoordinateY(double globalY){
+			return 0;
+		}
+
 		bool inLRR(double globalX, double globalY){
 			if (!inLSR(globalX, globalY)){
+				return false;
+			}
+			int mapCoordinateX = toMapCoordinateX(globalX);
+			int mapCoordinateY = toMapCoordinateY(globalY);
+			if (lrr(mapCoordinateX, mapCoordinateY) == 255){
 				return false;
 			}
 			return true;
@@ -136,10 +161,6 @@ class SRGNode{
 
 		bool inLIR(double globalX, double globalY){
 			return true;
-		}
-
-		//radius is hard coded..
-		SRGNode(SRGNode* parent, Pose pose) : parent(parent), pose(pose), radius(0.075), lsr(CImg <char>(ROBOT_MAP_HEIGHT, ROBOT_MAP_WIDTH)){
 		}
 
 		std::string ToString(){
@@ -159,11 +180,13 @@ class SRGNode{
 				double globalX = pose.x + deltaX;
 				double globalY = pose.y - deltaY;
 				if (inLSR(globalX, globalY)){
-					lsr(x,y) = 255;
-				}else{
 					lsr(x,y) = 0;
+				}else{
+					lsr(x,y) = 255;
 				}
 			}
+			lrr = CImg <char> (lsr);
+			lrr.erode(robotCircular);
 		}
 };
 
