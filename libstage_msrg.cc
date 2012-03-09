@@ -16,7 +16,6 @@ using namespace cimg_library;
 const double PI = 3.14159;
 const double TWO_PI = PI*2;
 const double RADIAN_PER_DEGREE = 0.01745;
-const double MOVING_FORWARD_EPSILON = 0.000000001;
 
 //Rp = sensor range
 const double Rp = 1.0;
@@ -24,6 +23,7 @@ const double Rp = 1.0;
 const double Rc = 3*Rp;
 
 const double ROBOT_MAP_RESOLUTION = 100;
+const int LRR_EROSION_EPSILON = 10;
 const int ROBOT_MAP_HEIGHT = (int)ceil(Rp*ROBOT_MAP_RESOLUTION*2)+1;
 const int ROBOT_MAP_WIDTH = (int)ceil(Rp*ROBOT_MAP_RESOLUTION*2)+1;
 const int ROBOT_MAP_ORIGIN_X = ROBOT_MAP_WIDTH/2;
@@ -37,7 +37,7 @@ const int MOVING = 3;
 const int STORE_POSITION = 4;
 const int STOPPED = 5;
 
-const long MAX_NODES = 5;
+const long MAX_NODES = 100;
 
 double sqr(double x){
 	return pow(x, 2);
@@ -102,12 +102,13 @@ class SRGNode{
 		CImg <char> robotCircular;
 
 		//radius is hard coded..
-		SRGNode(SRGNode* parent, Pose pose) : parent(parent), pose(pose), radius(0.075), lsr(CImg <char>(ROBOT_MAP_HEIGHT, ROBOT_MAP_WIDTH)), lrr(CImg <char>(ROBOT_MAP_HEIGHT, ROBOT_MAP_WIDTH)){
-			int robotCircularSize = floor(radius*2*ROBOT_MAP_RESOLUTION);
+		SRGNode(SRGNode* parent, Pose pose) : parent(parent), pose(pose), radius(0.15), lsr(CImg <char>(ROBOT_MAP_HEIGHT, ROBOT_MAP_WIDTH)), lrr(CImg <char>(ROBOT_MAP_HEIGHT, ROBOT_MAP_WIDTH)){
+			int robotRadiusCorrected = floor(radius*ROBOT_MAP_RESOLUTION+LRR_EROSION_EPSILON);
+			int robotBoundingBoxSize = robotRadiusCorrected*2;
 			char color[] = {255};
-			robotCircular = CImg <char>(robotCircularSize, robotCircularSize);
+			robotCircular = CImg <char>(robotBoundingBoxSize, robotBoundingBoxSize);
 			robotCircular = (char)0;
-			robotCircular = robotCircular.draw_circle(robotCircularSize/2, robotCircularSize/2, robotCircularSize/2, color);
+			robotCircular.draw_circle(robotBoundingBoxSize/2, robotBoundingBoxSize/2, robotRadiusCorrected, color);
 		}
 
 
@@ -136,11 +137,21 @@ class SRGNode{
 		}
 
 		int toMapCoordinateX(double globalX){
-			return 0;
+			int deltaX = floor((pose.x - globalX) * ROBOT_MAP_RESOLUTION);
+			return ROBOT_MAP_ORIGIN_X - deltaX;
 		}
 
 		int toMapCoordinateY(double globalY){
-			return 0;
+			int deltaY = floor((pose.y - globalY) * ROBOT_MAP_RESOLUTION);
+			return ROBOT_MAP_ORIGIN_Y + deltaY;
+		}
+
+		bool inMapLSR(int mapX, int mapY){
+			return lsr(mapX, mapY) == 0;
+		}
+
+		bool inMapLRR(int mapX, int mapY){
+			return lrr(mapX, mapY) == 0;
 		}
 
 		bool inLRR(double globalX, double globalY){
@@ -149,10 +160,7 @@ class SRGNode{
 			}
 			int mapCoordinateX = toMapCoordinateX(globalX);
 			int mapCoordinateY = toMapCoordinateY(globalY);
-			if (lrr(mapCoordinateX, mapCoordinateY) == 255){
-				return false;
-			}
-			return true;
+			return inMapLRR(mapCoordinateX, mapCoordinateY);
 		}
 
 		bool inLF(double globalX, double globalY){
@@ -187,6 +195,8 @@ class SRGNode{
 			}
 			lrr = CImg <char> (lsr);
 			lrr.erode(robotCircular);
+//			lsr.display();
+//			lrr.display();
 		}
 };
 
@@ -322,7 +332,7 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 			//dummy command..
 			if (robot->startup || robot-> nodes <= MAX_NODES){
 				//TODO: get a random configuration and set target..
-				while (!robot->current->inLSR(robot->current->pose.x+targetX, robot->current->pose.y+targetY)){
+				while (!robot->current->inLRR(robot->current->pose.x+targetX, robot->current->pose.y+targetY)){
 					targetX = frandom(-1*Rp, Rp);
 					targetY = frandom(-1*Rp, Rp);
 				}
