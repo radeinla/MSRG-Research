@@ -36,6 +36,12 @@ const int FINISHED_TURNING = 2;
 const int MOVING = 3;
 const int STORE_POSITION = 4;
 const int STOPPED = 5;
+const unsigned char FREE = 0;
+const unsigned char OBSTACLE = 255;
+const unsigned char UNEXPLORED = 20;
+const unsigned char UNSET = 20;
+const unsigned char BACKGROUND = 0;
+const unsigned char FOREGROUND = 255;
 
 const long MAX_NODES = 100;
 
@@ -97,17 +103,18 @@ class SRGNode{
 		std::vector <meters_t> ranges;
 		double radius;
 		std::vector <std::vector<int> > mapData;
-		CImg <char> lsr;
-		CImg <char> lrr;
-		CImg <char> robotCircular;
+		CImg <unsigned char> lsr;
+		CImg <unsigned char> lrr;
+		CImg <unsigned char> robotCircular;
 
 		//radius is hard coded..
-		SRGNode(SRGNode* parent, Pose pose) : parent(parent), pose(pose), radius(0.15), lsr(CImg <char>(ROBOT_MAP_HEIGHT, ROBOT_MAP_WIDTH)), lrr(CImg <char>(ROBOT_MAP_HEIGHT, ROBOT_MAP_WIDTH)){
+		SRGNode(SRGNode* parent, Pose pose) : parent(parent), pose(pose), radius(0.15), lsr(CImg <unsigned char>(ROBOT_MAP_HEIGHT, ROBOT_MAP_WIDTH)), lrr(CImg <unsigned char>(ROBOT_MAP_HEIGHT, ROBOT_MAP_WIDTH)){
+			lsr = UNEXPLORED;
 			int robotRadiusCorrected = floor(radius*ROBOT_MAP_RESOLUTION+LRR_EROSION_EPSILON);
 			int robotBoundingBoxSize = robotRadiusCorrected*2;
-			char color[] = {255};
-			robotCircular = CImg <char>(robotBoundingBoxSize, robotBoundingBoxSize);
-			robotCircular = (char)0;
+			unsigned char color[] = {FOREGROUND};
+			robotCircular = CImg <unsigned char>(robotBoundingBoxSize, robotBoundingBoxSize);
+			robotCircular = BACKGROUND;
 			robotCircular.draw_circle(robotBoundingBoxSize/2, robotBoundingBoxSize/2, robotRadiusCorrected, color);
 		}
 
@@ -147,11 +154,11 @@ class SRGNode{
 		}
 
 		bool inMapLSR(int mapX, int mapY){
-			return lsr(mapX, mapY) == 0;
+			return lsr(mapX, mapY) == FREE;
 		}
 
 		bool inMapLRR(int mapX, int mapY){
-			return lrr(mapX, mapY) == 0;
+			return lrr(mapX, mapY) == FREE;
 		}
 
 		bool inLRR(double globalX, double globalY){
@@ -181,20 +188,36 @@ class SRGNode{
 			return ss.str();
 		}
 
-		void update_map_data(){
+		void update_map_data(CImg<unsigned char> globalMap){
 			cimg_forXY(lsr,x,y){
 				double deltaX = ((double)x-ROBOT_MAP_ORIGIN_X)/ROBOT_MAP_RESOLUTION;
 				double deltaY = ((double)y-ROBOT_MAP_ORIGIN_Y)/ROBOT_MAP_RESOLUTION;
 				double globalX = pose.x + deltaX;
 				double globalY = pose.y - deltaY;
 				if (inLSR(globalX, globalY)){
-					lsr(x,y) = 0;
+					lsr(x,y) = FREE;
+				}else if (!inLSR(globalX, globalY) && inPerceptionRange(globalX, globalY)){
+					lsr(x,y) = OBSTACLE;
 				}else{
-					lsr(x,y) = 255;
+					lsr(x,y) = UNEXPLORED;
 				}
 			}
-			lrr = CImg <char> (lsr);
+			lrr = CImg <unsigned char> (lsr);
+			cimg_forXY(lrr, x, y){
+				if (lrr(x, y) == UNSET || lrr(x,y) == FOREGROUND){
+					lrr(x, y) = BACKGROUND;
+				}else{
+					lrr(x, y) = FOREGROUND;
+				}
+			}
 			lrr.erode(robotCircular);
+			cimg_forXY(lrr, x, y){
+				if (lrr(x, y) == BACKGROUND){
+					lrr(x, y) = FOREGROUND;
+				}else{
+					lrr(x, y) = BACKGROUND;
+				}
+			}
 //			lsr.display();
 //			lrr.display();
 		}
@@ -212,12 +235,34 @@ class Robot{
 		SRGNode* current;
 		int state;
 		Velocity lastVelocity;
-		CImgDisplay disp;
+		CImg <unsigned char> map;
+		int mapHeight;
+		int mapWidth;
 
 		//Global Pose..
 		Pose targetPose;
-		Robot() : srg(NULL), current(NULL), state(STORE_POSITION), startup(true), nodes(0){
-			disp.set_title(name.data());
+		Robot(int mapHeight, int mapWidth) : srg(NULL), current(NULL), state(STORE_POSITION), startup(true), nodes(0), mapHeight(mapHeight), mapWidth(mapWidth){
+			map = CImg <unsigned char>(mapWidth, mapHeight);
+			map = UNEXPLORED;
+		}
+
+		int toMapX(double globalX){
+			return (mapWidth/2)+floor(globalX * ROBOT_MAP_RESOLUTION);
+		}
+
+		int toMapY(double globalY){
+			return (mapHeight/2)-floor(globalY * ROBOT_MAP_RESOLUTION);
+		}
+
+		void update_map_data(){
+			SRGNode* currentSRG = current;
+			int mapX = toMapX(currentSRG->pose.x);
+			int mapY = toMapY(currentSRG->pose.y);
+			cimg_forXY(current->lsr, x, y){
+				if (current->lsr(x, y) == OBSTACLE || current->lsr(x,y) == FREE){
+					map(mapX-ROBOT_MAP_HEIGHT+x, mapY-ROBOT_MAP_WIDTH+y) = current->lsr(x,y);
+				}
+			}
 		}
 
 
@@ -307,8 +352,7 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 			currentNode->bearings = bearings;
 			currentNode->ranges = ranges;
 			currentNode->fov = fov;
-			currentNode->lsr = (char)0;
-			currentNode->update_map_data();
+			currentNode->update_map_data(robot->map);
 			robot->srg = currentNode;
 			robot->current = currentNode;
 		}else{
@@ -316,11 +360,14 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 			currentNode->bearings = bearings;
 			currentNode->ranges = ranges;
 			currentNode->fov = fov;
-			currentNode->update_map_data();
+			currentNode->update_map_data(robot->map);
 			robot->current->children.push_back(currentNode);
 			robot->current = currentNode;
 		}
-//		robot->current->lsr.display(robot->disp, false);
+		robot->update_map_data();
+		robot->current->lsr.display();
+		robot->current->lrr.display();
+		robot->map.display();
 		robot->nodes++;
 	}
 
@@ -383,6 +430,11 @@ class MSRG{
 
 		//connect to world bots
 		void connect(World* world){
+			Model* floorplan = world->GetModel("msrg_floorplan");
+			Geom floorplanGeom = floorplan->GetGeom();
+			Size floorplanSize = floorplanGeom.size;
+			int mapHeight = floorplanSize.y*ROBOT_MAP_RESOLUTION;
+			int mapWidth = floorplanSize.x*ROBOT_MAP_RESOLUTION;
 			for (unsigned int idx = 0; ; idx++){
 				std::stringstream name;
 				name << "msrg" << idx;
@@ -398,7 +450,7 @@ class MSRG{
 
 				ModelRanger* ranger = reinterpret_cast<ModelRanger*>(posmod->GetUnusedModelOfType( "ranger" ));
 
-				Robot* robot = new Robot();
+				Robot* robot = new Robot(mapHeight, mapWidth);
 				robot->name = name.str();
 				robot->position = posmod;
 				robot->position->AddCallback(Model::CB_UPDATE, (model_callback_t)PositionUpdate, robot);
@@ -406,7 +458,6 @@ class MSRG{
 				robot->ranger = ranger;
 				robot->ranger->Subscribe();
 				robot->lastVelocity = robot->position->GetVelocity();
-				robot->disp.show();
 				robots.push_back(robot);
 			}
 
