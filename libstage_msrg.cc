@@ -13,22 +13,6 @@
 using namespace Stg;
 using namespace cimg_library;
 
-const double PI = 3.14159;
-const double TWO_PI = PI*2;
-const double RADIAN_PER_DEGREE = 0.01745;
-
-//Rp = sensor range
-const double Rp = 1.0;
-//Rc = communication range (must be a multiple of Rp)
-const double Rc = 3*Rp;
-
-const double ROBOT_MAP_RESOLUTION = 100;
-const int LRR_EROSION_EPSILON = 10;
-const int ROBOT_MAP_HEIGHT = (int)ceil(Rp*ROBOT_MAP_RESOLUTION*2)+1;
-const int ROBOT_MAP_WIDTH = (int)ceil(Rp*ROBOT_MAP_RESOLUTION*2)+1;
-const int ROBOT_MAP_ORIGIN_X = ROBOT_MAP_WIDTH/2;
-const int ROBOT_MAP_ORIGIN_Y = ROBOT_MAP_HEIGHT/2;
-
 //Robot states
 const int READY = 0;
 const int TURNING = 1;
@@ -42,6 +26,23 @@ const unsigned char UNEXPLORED = 20;
 const unsigned char UNSET = 20;
 const unsigned char BACKGROUND = 0;
 const unsigned char FOREGROUND = 255;
+
+const double PI = 3.14159;
+const double TWO_PI = PI*2;
+const double RADIAN_PER_DEGREE = 0.01745;
+
+//Rp = sensor range
+const double Rp = 2.0;
+//Rc = communication range (must be a multiple of Rp)
+const double Rc = 3*Rp;
+
+const double ROBOT_MAP_RESOLUTION = 100;
+const int LRR_EROSION_EPSILON = 10;
+const int ROBOT_MAP_HEIGHT = (int)ceil(Rp*ROBOT_MAP_RESOLUTION*2)+1;
+const int ROBOT_MAP_WIDTH = (int)ceil(Rp*ROBOT_MAP_RESOLUTION*2)+1;
+const int ROBOT_MAP_ORIGIN_X = ROBOT_MAP_WIDTH/2;
+const int ROBOT_MAP_ORIGIN_Y = ROBOT_MAP_HEIGHT/2;
+const CImg <unsigned char> NO_BACKGROUND(ROBOT_MAP_WIDTH, ROBOT_MAP_HEIGHT, 1, 1, FOREGROUND);
 
 const long MAX_NODES = 100;
 
@@ -108,15 +109,16 @@ class SRGNode{
 		CImg <unsigned char> lf;
 		CImg <unsigned char> lir;
 		CImg <unsigned char> robotCircular;
+		std::vector <double*> lirRaffle;
 
-		SRGNode(SRGNode* parent, Pose pose) : parent(parent), pose(pose), radius(0.15){
+		SRGNode(SRGNode* parent, Pose pose) : parent(parent), pose(pose), radius(0.25){
 			lsr = CImg <unsigned char>(ROBOT_MAP_HEIGHT, ROBOT_MAP_WIDTH);
 			lsr = UNEXPLORED;
 			lf = CImg <unsigned char>(ROBOT_MAP_HEIGHT, ROBOT_MAP_WIDTH);
 			lf = FOREGROUND;
 			lir = CImg <unsigned char>(ROBOT_MAP_HEIGHT, ROBOT_MAP_WIDTH);
 			lir = FOREGROUND;
-			int robotRadiusCorrected = floor(radius*ROBOT_MAP_RESOLUTION+LRR_EROSION_EPSILON);
+			int robotRadiusCorrected = floor(radius*ROBOT_MAP_RESOLUTION);
 			int robotBoundingBoxSize = robotRadiusCorrected*2;
 			unsigned char color[] = {FOREGROUND};
 			robotCircular = CImg <unsigned char>(robotBoundingBoxSize, robotBoundingBoxSize);
@@ -124,10 +126,9 @@ class SRGNode{
 			robotCircular.draw_circle(robotBoundingBoxSize/2, robotBoundingBoxSize/2, robotRadiusCorrected, color);
 		}
 
-
 		bool inPerceptionRange(double globalX, double globalY){
 			double dist = distance(pose.x, pose.y, globalX, globalY);
-			return dist >= 0 && dist <= Rp;
+			return InBetween(dist, 0, Rp);
 		}
 
 		bool inLSR(double globalX, double globalY){
@@ -149,6 +150,14 @@ class SRGNode{
 			return true;
 		}
 
+		double toGlobalCoordinateX(int mapX){
+			return pose.x + (((double)mapX-ROBOT_MAP_ORIGIN_X)/ROBOT_MAP_RESOLUTION);
+		}
+
+		double toGlobalCoordinateY(int mapY){
+			return pose.y - (((double)mapY-ROBOT_MAP_ORIGIN_Y)/ROBOT_MAP_RESOLUTION);
+		}
+
 		int toMapCoordinateX(double globalX){
 			int deltaX = floor((pose.x - globalX) * ROBOT_MAP_RESOLUTION);
 			return ROBOT_MAP_ORIGIN_X - deltaX;
@@ -167,6 +176,10 @@ class SRGNode{
 			return lrr(mapX, mapY) == BACKGROUND;
 		}
 
+		bool inMapLIR(int mapX, int mapY){
+			return lir(mapX, mapY) == BACKGROUND;
+		}
+
 		bool inLRR(double globalX, double globalY){
 			if (!inLSR(globalX, globalY)){
 				return false;
@@ -174,6 +187,15 @@ class SRGNode{
 			int mapCoordinateX = toMapCoordinateX(globalX);
 			int mapCoordinateY = toMapCoordinateY(globalY);
 			return inMapLRR(mapCoordinateX, mapCoordinateY);
+		}
+
+		bool inLIR(double globalX, double globalY){
+			if (!inLRR(globalX, globalY)){
+				return false;
+			}
+			int mapCoordinateX = toMapCoordinateX(globalX);
+			int mapCoordinateY = toMapCoordinateY(globalY);
+			return inMapLIR(mapCoordinateX, mapCoordinateY);
 		}
 
 		std::string ToString(){
@@ -273,19 +295,23 @@ class SRGNode{
 			std::cout << "(" << mapX << "," << mapY << ")\n";
 			cimg_forXY(lsr, x, y){
 				if (lsr(x,y) == BACKGROUND && isLF(localTopLeftX+x, localTopLeftY+y, map, mapWidth, mapHeight)){
-					std::cout << "(" << x << "," << y << "): " << (unsigned int)lsr(x,y) << "\n";
 					lf(x, y) = BACKGROUND;
 				}
 			}
 			std::cout << "Calculating distance from lf matrix\n";
-			//CImg <double> distanceFromLf(lf);
-			//distanceFromLf.distance(BACKGROUND);
-			//std::cout << "Calculating lir\n";
-			//cimg_forXY(distanceFromLf, x, y){
-			//	if (lsr(x,y) == BACKGROUND && distanceFromLf(x,y) <= Rp && distanceFromLf(x,y) != 0){
-			//		lir(x, y) = BACKGROUND;
-			//	}
-			//}
+			CImg <double> distanceFromLF(lf);
+			distanceFromLF.distance(BACKGROUND);
+			cimg_forXY(distanceFromLF, x, y){
+				if (lrr(x,y) == BACKGROUND && distanceFromLF(x,y) <= Rp*ROBOT_MAP_RESOLUTION && distanceFromLF(x,y) > 0){
+					lir(x, y) = BACKGROUND;
+					double globalCoordinateX = toGlobalCoordinateX(x);
+					double globalCoordinateY = toGlobalCoordinateY(y);
+					double* coordinates = new double[2];
+					coordinates[0] = globalCoordinateX;
+					coordinates[1] = globalCoordinateY;
+					lirRaffle.push_back(coordinates);
+				}
+			}
 		}
 };
 
@@ -434,6 +460,8 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 		robot->current->lrr.display();
 		std::cout << "Showing lf\n";
 		robot->current->lf.display();
+		std::cout << "Showing lir\n";
+		robot->current->lir.display();
 		std::cout << "Showing map\n";
 		robot->map.display();*/
 		robot->nodes++;
@@ -447,12 +475,16 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 			//dummy command..
 			if (robot->startup || robot-> nodes <= MAX_NODES){
 				//TODO: get a random configuration and set target..
-				while (!robot->current->inLRR(robot->current->pose.x+targetX, robot->current->pose.y+targetY)){
-					targetX = frandom(-1*Rp, Rp);
-					targetY = frandom(-1*Rp, Rp);
+				if (robot->current->lirRaffle.size() == 0){
+					std::cout << "No LIR!!!!\n";
+					robot->state = STOPPED;
+				}else{
+					int randomIndex = random()%robot->current->lirRaffle.size();
+					double* randomCoordinates = robot->current->lirRaffle[randomIndex];
+					std::cout << "(" << randomCoordinates[0] << "," << randomCoordinates[1] << ")\n";
+					robot->SetTarget(Pose(randomCoordinates[0], randomCoordinates[1],0,0));
+					robot->TurnToGlobalAngle();
 				}
-				robot->SetTarget(Pose(robot->current->pose.x+targetX,robot->current->pose.y+targetY,0,0));
-				robot->TurnToGlobalAngle();
 				robot->startup = false;
 			}else if (robot->nodes > MAX_NODES){
 				robot->state = STOPPED;
@@ -462,6 +494,7 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 			robot->state =  READY;
 			break;
 		case STOPPED:
+			robot->map.display();
 			break;
 		//Go To Position.. Considered an atomic operation.. Cannot be stopped anywhere here..
 		case TURNING:
