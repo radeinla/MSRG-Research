@@ -105,15 +105,14 @@ class SRGNode{
 		CImg <unsigned char> lf;
 		CImg <unsigned char> lir;
 		CImg <unsigned char> robotCircular;
+		CImg <unsigned char>* globalMap;
+		int globalMapWidth;
+		int globalMapHeight;
 		std::vector <double*> lirRaffle;
 
-		SRGNode(SRGNode* parent, Pose pose) : parent(parent), pose(pose), radius(0.25){
+		SRGNode(SRGNode* parent, Pose pose, CImg <unsigned char>* globalMap, int globalMapWidth, int globalMapHeight) : parent(parent), pose(pose), radius(0.25), globalMap(globalMap), globalMapWidth(globalMapWidth), globalMapHeight(globalMapHeight){
 			lsr = CImg <unsigned char>(ROBOT_MAP_HEIGHT, ROBOT_MAP_WIDTH);
 			lsr = UNEXPLORED;
-			lf = CImg <unsigned char>(ROBOT_MAP_HEIGHT, ROBOT_MAP_WIDTH);
-			lf = FOREGROUND;
-			lir = CImg <unsigned char>(ROBOT_MAP_HEIGHT, ROBOT_MAP_WIDTH);
-			lir = FOREGROUND;
 			int robotRadiusCorrected = floor(radius*ROBOT_MAP_RESOLUTION);
 			int robotBoundingBoxSize = robotRadiusCorrected*2;
 			unsigned char color[] = {FOREGROUND};
@@ -154,14 +153,22 @@ class SRGNode{
 			return pose.y - (((double)mapY-ROBOT_MAP_ORIGIN_Y)/ROBOT_MAP_RESOLUTION);
 		}
 
-		int toMapCoordinateX(double globalX){
+		int toLocalMapCoordinateX(double globalX){
 			int deltaX = floor((pose.x - globalX) * ROBOT_MAP_RESOLUTION);
 			return ROBOT_MAP_ORIGIN_X - deltaX;
 		}
 
-		int toMapCoordinateY(double globalY){
+		int toLocalMapCoordinateY(double globalY){
 			int deltaY = floor((pose.y - globalY) * ROBOT_MAP_RESOLUTION);
 			return ROBOT_MAP_ORIGIN_Y + deltaY;
+		}
+
+		int toGlobalMapCoordinateX(double globalX){
+			return (globalMapWidth/2)+floor(globalX * ROBOT_MAP_RESOLUTION);
+		}
+
+		int toGlobalMapCoordinateY(double globalY){
+			return (globalMapHeight/2)-floor(globalY * ROBOT_MAP_RESOLUTION);
 		}
 
 		bool inMapLSR(int mapX, int mapY){
@@ -180,18 +187,14 @@ class SRGNode{
 			if (!inLSR(globalX, globalY)){
 				return false;
 			}
-			int mapCoordinateX = toMapCoordinateX(globalX);
-			int mapCoordinateY = toMapCoordinateY(globalY);
-			return inMapLRR(mapCoordinateX, mapCoordinateY);
+			return inMapLRR(toLocalMapCoordinateX(globalX), toLocalMapCoordinateY(globalY));
 		}
 
 		bool inLIR(double globalX, double globalY){
 			if (!inLRR(globalX, globalY)){
 				return false;
 			}
-			int mapCoordinateX = toMapCoordinateX(globalX);
-			int mapCoordinateY = toMapCoordinateY(globalY);
-			return inMapLIR(mapCoordinateX, mapCoordinateY);
+			return inMapLIR(toLocalMapCoordinateX(globalX), toLocalMapCoordinateY(globalY));
 		}
 
 		std::string ToString(){
@@ -204,33 +207,33 @@ class SRGNode{
 			return ss.str();
 		}
 
-		bool isValidXCoordinate(int mapX, int mapWidth){
-			if (mapX < 0){
+		bool isValidXCoordinate(int globalMapX){
+			if (globalMapX < 0){
 				return false;
 			}
-			if (mapX >= mapWidth){
-				return false;
-			}
-			return true;
-		}
-
-		bool isValidYCoordinate(int mapY, int mapHeight){
-			if (mapY < 0){
-				return false;
-			}
-			if (mapY >= mapHeight){
+			if (globalMapX >= globalMapWidth){
 				return false;
 			}
 			return true;
 		}
 
-		bool isLF(int mapX, int mapY, CImg <unsigned char>* map, int mapWidth, int mapHeight){
+		bool isValidYCoordinate(int globalMapY){
+			if (globalMapY < 0){
+				return false;
+			}
+			if (globalMapY >= globalMapHeight){
+				return false;
+			}
+			return true;
+		}
+
+		bool isLF(int globalMapX, int globalMapY){
 			int delta[8][2] = {{-1, -1}, {-1, 0}, {-1, 1}, {0, -1}, {0, 1}, {1, -1}, {1, 0}, {1, 1}};
 			for (int i = 0; i < 8; i++){
-				int prospectX = mapX + delta[i][0];
-				int prospectY = mapY + delta[i][1];
-				if (isValidXCoordinate(prospectX, mapWidth) && isValidYCoordinate(prospectY, mapHeight)){
-					if (map->operator()(prospectX, prospectY) == UNEXPLORED){
+				int prospectX = globalMapX + delta[i][0];
+				int prospectY = globalMapY + delta[i][1];
+				if (isValidXCoordinate(prospectX) && isValidYCoordinate(prospectY)){
+					if (globalMap->operator()(prospectX, prospectY) == UNEXPLORED){
 						return true;
 					}
 				}
@@ -238,15 +241,28 @@ class SRGNode{
 			return false;
 		}
 
+		void update_lsr(){
+			std::cout << "Updating LSR\n";
 
-		void update_map_data(CImg <unsigned char>* map, int mapWidth, int mapHeight, int mapX, int mapY){
-			std::cout << "current map coordinate: (" << mapX << "," << mapY << ")\n";
-
-			int localTopLeftX = mapX-(ROBOT_MAP_WIDTH/2);
-			int localTopLeftY = mapY-(ROBOT_MAP_HEIGHT/2);
+			int globalMapX = toGlobalMapCoordinateX(pose.x);
+			int globalMapY = toGlobalMapCoordinateY(pose.y);
+			std::cout << "Updating global map\n";
+			int localTopLeftX = globalMapX-(ROBOT_MAP_WIDTH/2);
+			int localTopLeftY = globalMapY-(ROBOT_MAP_HEIGHT/2);
 
 			std::cout << "local top left: (" << localTopLeftX << "," << localTopLeftY << ")\n";
 
+			cimg_forXY(lsr, x, y){
+				
+			}
+
+			std::cout << "Finished updating lsr\n";
+
+//			std::cout << "Showing updated lsr\n";
+//			lsr.display();
+		}
+
+		void calculate_lsr(){
 			std::cout << "Calculating lsr\n";
 			cimg_forXY(lsr,x,y){
 				double deltaX = ((double)x-ROBOT_MAP_ORIGIN_X)/ROBOT_MAP_RESOLUTION;
@@ -261,13 +277,33 @@ class SRGNode{
 					lsr(x,y) = UNEXPLORED;
 				}
 			}
+			std::cout << "Finished calculating lsr\n";
+
+//			std::cout << "Showing lsr\n";
+//			lsr.display();
+		}
+
+		void update_global_map(){
+			int globalMapX = toGlobalMapCoordinateX(pose.x);
+			int globalMapY = toGlobalMapCoordinateY(pose.y);
+			std::cout << "Updating global map\n";
+			int localTopLeftX = globalMapX-(ROBOT_MAP_WIDTH/2);
+			int localTopLeftY = globalMapY-(ROBOT_MAP_HEIGHT/2);
+
+			std::cout << "local top left: (" << localTopLeftX << "," << localTopLeftY << ")\n";
 
 			cimg_forXY(lsr, x, y){
 				if (lsr(x, y) == OBSTACLE || lsr(x,y) == FREE){
-					map->operator()(localTopLeftX+x, localTopLeftY+y) = lsr(x,y);
+					globalMap->operator()(localTopLeftX+x, localTopLeftY+y) = lsr(x,y);
 				}
 			}
+			std::cout << "Finished updating global map\n";
 
+//			std::cout << "Showing global map\n";
+//			globalMap->display();
+		}
+
+		void calculate_lrr(){
 			std::cout << "Calculating lrr\n";
 			lrr = CImg <unsigned char> (lsr);
 			cimg_forXY(lrr, x, y){
@@ -287,16 +323,47 @@ class SRGNode{
 				}
 			}
 
+			std::cout << "Finished calculating lrr\n";
+
+//			std::cout << "Showing lrr\n";
+//			lrr.display();
+		}
+
+		void calculate_lf(){
 			std::cout << "Calculating lf\n";
-			std::cout << "(" << mapX << "," << mapY << ")\n";
+			int globalMapX = toGlobalMapCoordinateX(pose.x);
+			int globalMapY = toGlobalMapCoordinateY(pose.y);
+
+			int localTopLeftX = globalMapX-(ROBOT_MAP_WIDTH/2);
+			int localTopLeftY = globalMapY-(ROBOT_MAP_HEIGHT/2);
+
+			lf = CImg <unsigned char>(ROBOT_MAP_HEIGHT, ROBOT_MAP_WIDTH);
+			lf = FOREGROUND;
+
 			cimg_forXY(lsr, x, y){
-				if (lsr(x,y) == BACKGROUND && isLF(localTopLeftX+x, localTopLeftY+y, map, mapWidth, mapHeight)){
+				if (lsr(x,y) == BACKGROUND && isLF(localTopLeftX+x, localTopLeftY+y)){
 					lf(x, y) = BACKGROUND;
 				}
 			}
+			std::cout << "Finished calculating lf\n";
+
+//			std::cout << "Showing lf\n";
+//			lf.display();
+		}
+
+		void calculate_lir(){
+			std::cout << "Calculating lir\n";
+
+			lir = CImg <unsigned char>(ROBOT_MAP_HEIGHT, ROBOT_MAP_WIDTH);
+			lir = FOREGROUND;
+
 			std::cout << "Calculating distance from lf matrix\n";
+
 			CImg <double> distanceFromLF(lf);
 			distanceFromLF.distance(BACKGROUND);
+
+			lirRaffle.clear();
+
 			cimg_forXY(distanceFromLF, x, y){
 				if (lrr(x,y) == BACKGROUND && distanceFromLF(x,y) <= Rp*ROBOT_MAP_RESOLUTION && distanceFromLF(x,y) > 0){
 					lir(x, y) = BACKGROUND;
@@ -308,17 +375,45 @@ class SRGNode{
 					lirRaffle.push_back(coordinates);
 				}
 			}
+
+			std::cout << "Finished calculating lir\n";
+
+//			std::cout << "Showing lir\n";
+//			lir.display();
+
+		}
+
+		void update_map_data(int mapWidth, int mapHeight, int mapX, int mapY, bool backtracking){
+			std::cout << "current map coordinate: (" << mapX << "," << mapY << ")\n";
+
+			int localTopLeftX = mapX-(ROBOT_MAP_WIDTH/2);
+			int localTopLeftY = mapY-(ROBOT_MAP_HEIGHT/2);
+
+			std::cout << "local top left: (" << localTopLeftX << "," << localTopLeftY << ")\n";
+
+			if (backtracking){
+				update_lsr();
+			}else{
+				calculate_lsr();
+			}
+			update_global_map();
+			calculate_lrr();
+			calculate_lf();
+			calculate_lir();
 		}
 };
 
 class Robot{
 	public:
+		bool backtracking;
 		bool startup;
 		long nodes;
 		std::string name;
 		ModelPosition* position;
 		ModelRanger* ranger;
 		std::vector <int> robotsInWifiRange;
+		std::vector <SRGNode*> srgList;
+		SRGNode* backtrackTarget;
 		SRGNode* srg;
 		SRGNode* current;
 		int state;
@@ -329,7 +424,7 @@ class Robot{
 
 		//Global Pose..
 		Pose targetPose;
-		Robot(int mapHeight, int mapWidth) : srg(NULL), current(NULL), state(STORE_POSITION), startup(true), nodes(0), mapHeight(mapHeight), mapWidth(mapWidth){
+		Robot(int mapHeight, int mapWidth) : srg(NULL), current(NULL), state(STORE_POSITION), startup(true), nodes(0), mapHeight(mapHeight), mapWidth(mapWidth), backtracking(false){
 			map = CImg <unsigned char>(mapWidth, mapHeight);
 			map = UNEXPLORED;
 		}
@@ -343,11 +438,11 @@ class Robot{
 		}
 
 		int toMapX(double globalX){
-			return (mapWidth/2)+floor(globalX * ROBOT_MAP_RESOLUTION) - ROBOT_MAP_ORIGIN_X;
+			return (mapWidth/2)+floor(globalX * ROBOT_MAP_RESOLUTION);
 		}
 
 		int toMapY(double globalY){
-			return (mapHeight/2)-floor(globalY * ROBOT_MAP_RESOLUTION) - ROBOT_MAP_ORIGIN_Y;
+			return (mapHeight/2)-floor(globalY * ROBOT_MAP_RESOLUTION);
 		}
 
 		void SetTarget(Pose target){
@@ -433,37 +528,48 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 			fov.push_back(HumanAngle(sensors[i].fov));
 		}
 
-		if (robot->current == NULL){
-			SRGNode* currentNode = new SRGNode(NULL, currentPose);
-			currentNode->bearings = bearings;
-			currentNode->ranges = ranges;
-			currentNode->fov = fov;
-			robot->current = currentNode;
-			currentNode->update_map_data(&(robot->map), robot->mapWidth, robot->mapHeight, robot->currentMapX(), robot->currentMapY());
+		SRGNode* currentNode;
+
+		if (robot->backtracking){
+			currentNode = robot->backtrackTarget;
+		}else if (robot->nodes == 0){
+			currentNode = new SRGNode(NULL, currentPose, &(robot->map), robot->mapWidth, robot->mapHeight);
+//			currentNode->update_map_data(robot->mapWidth, robot->mapHeight, robot->currentMapX(), robot->currentMapY(), robot->backtracking);
+		}else{
+			currentNode = new SRGNode(robot->current, currentPose, &(robot->map), robot->mapWidth, robot->mapHeight);
+//			currentNode->update_map_data(robot->mapWidth, robot->mapHeight, robot->currentMapX(), robot->currentMapY(), robot->backtracking);
+		}
+
+		currentNode->bearings = bearings;
+		currentNode->ranges = ranges;
+		currentNode->fov = fov;
+		
+		if (robot->backtracking){
+			currentNode->update_lsr();
+		}else{
+			currentNode->calculate_lsr();
+		}
+		currentNode->update_global_map();
+		currentNode->calculate_lrr();
+		currentNode->calculate_lf();
+		currentNode->calculate_lir();
+
+		if (robot->nodes == 0){
 			robot->srg = currentNode;
 		}else{
-			SRGNode* currentNode = new SRGNode(robot->current, currentPose);
-			currentNode->bearings = bearings;
-			currentNode->ranges = ranges;
-			currentNode->fov = fov;
-			robot->current = currentNode;
-			currentNode->update_map_data(&(robot->map), robot->mapWidth, robot->mapHeight, robot->currentMapX(), robot->currentMapY());
-			robot->current->children.push_back(currentNode);
+			if (!robot->backtracking){
+				robot->current->children.push_back(currentNode);
+			}
 		}
-/*		std::cout << "Showing lsr\n";
-		robot->current->lsr.display();
-		std::cout << "Showing lrr\n";
-		robot->current->lrr.display();
-		std::cout << "Showing lf\n";
-		robot->current->lf.display();
-		std::cout << "Showing lir\n";
-		robot->current->lir.display();
-		std::cout << "Showing map\n";
-		robot->map.display();*/
+
+		robot->current = currentNode;
+
+/*		if (!robot->backtracking){
+			robot->srgList.push_back(currentNode);
+		}*/
+
 		robot->nodes++;
 	}
-
-	double targetX = frandom(-1*Rp, Rp), targetY = frandom(-1*Rp, Rp);
 
 	switch(robot->state){
 		case READY:
@@ -472,14 +578,25 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 			if (robot->startup || robot-> nodes <= MAX_NODES){
 				//TODO: get a random configuration and set target..
 				if (robot->current->lirRaffle.size() == 0){
-					std::cout << "No LIR!!!!\n";
-					robot->state = STOPPED;
+					if (robot->current->parent == NULL){
+						std::cout << "Back at starting position, stopping because no more LIR!!!!\n";
+						robot->backtracking = false;
+						robot->state = STOPPED;
+					}else{
+						std::cout << "Backtracking to parent..\n";
+						robot->backtracking = true;
+						robot->backtrackTarget = robot->current->parent;
+						std::cout << "(" << robot->backtrackTarget->pose.x << "," << robot->backtrackTarget->pose.y << ")\n";
+						robot->SetTarget(Pose(robot->backtrackTarget->pose.x, robot->backtrackTarget->pose.y,0,0));
+						robot->TurnToGlobalAngle();
+					}
 				}else{
 					int randomIndex = random()%robot->current->lirRaffle.size();
 					double* randomCoordinates = robot->current->lirRaffle[randomIndex];
 					std::cout << "(" << randomCoordinates[0] << "," << randomCoordinates[1] << ")\n";
 					robot->SetTarget(Pose(randomCoordinates[0], randomCoordinates[1],0,0));
 					robot->TurnToGlobalAngle();
+					robot->backtracking = false;
 				}
 				robot->startup = false;
 			}else if (robot->nodes > MAX_NODES){
