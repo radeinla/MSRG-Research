@@ -116,7 +116,7 @@ class SRGNode{
 		int globalMapHeight;
 		std::vector <double*> lirRaffle;
 
-		SRGNode(SRGNode* parent, Pose pose, CImg <unsigned char>* globalMap, int globalMapWidth, int globalMapHeight) : parent(parent), pose(pose), radius(0.30), globalMap(globalMap), globalMapWidth(globalMapWidth), globalMapHeight(globalMapHeight){
+		SRGNode(SRGNode* parent, Pose pose, CImg <unsigned char>* globalMap, int globalMapWidth, int globalMapHeight) : parent(parent), pose(pose), radius(0.50), globalMap(globalMap), globalMapWidth(globalMapWidth), globalMapHeight(globalMapHeight){
 		}
 
 		bool inPerceptionRange(double globalX, double globalY){
@@ -303,6 +303,8 @@ class SRGNode{
 
 			std::cout << "Finished calculating lsr\n";
 
+			update_lsr();
+
 //			std::cout << "Showing lsr\n";
 //			lsr.display();
 		}
@@ -398,10 +400,16 @@ class SRGNode{
 			CImg <double> distanceFromLF(lf);
 			distanceFromLF.distance(BACKGROUND);
 
+			CImg <double> distanceFromUnexplored(lsr);
+			distanceFromUnexplored.distance(UNEXPLORED);
+
+			//distanceFromLF.display();
+			//distanceFromUnexplored.display();
+
 			lirRaffle.clear();
 
 			cimg_forXY(distanceFromLF, x, y){
-				if (lrr(x,y) == BACKGROUND && distanceFromLF(x,y) <= Rp*ROBOT_MAP_RESOLUTION && distanceFromLF(x,y) > 0){
+				if (lrr(x,y) == BACKGROUND && distanceFromLF(x,y) <= Rp*ROBOT_MAP_RESOLUTION && distanceFromLF(x,y) > 0 && distanceFromUnexplored(x,y)-5 <= distanceFromLF(x,y)){
 					lir(x, y) = BACKGROUND;
 					double globalCoordinateX = toGlobalCoordinateX(x);
 					double globalCoordinateY = toGlobalCoordinateY(y);
