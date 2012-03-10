@@ -72,13 +72,9 @@ double frandom(double min, double max){
 
 //in radians..
 bool WolrdAngle360Between(double n, double a, double b) {
-        n = WorldAngle360(n);
+        n = fmod(TWO_PI + fmod(n, TWO_PI), TWO_PI);
         a = WorldAngle360(a);
         b = WorldAngle360(b);
-
-	if (a > b){
-		b = b + TWO_PI;
-	}
 
         if (a < b)
                 return a <= n && n <= b;
@@ -140,7 +136,7 @@ class SRGNode{
 				double halfSpan = (fov[i]/2)+1;
 				double fromAngle360 = WorldAngle360(bearings[i]-WorldAngle(halfSpan));
 				double toAngle360 = WorldAngle360(bearings[i]+WorldAngle(halfSpan));
-				
+
 				if (WolrdAngle360Between(localPose, fromAngle360, toAngle360)){
 					if (!InBetween(distance(pose.x, pose.y, globalX, globalY), 0, ranges[i])){
 						return false;
