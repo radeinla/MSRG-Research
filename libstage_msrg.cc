@@ -22,8 +22,8 @@ const int STORE_POSITION = 4;
 const int STOPPED = 5;
 const unsigned char FREE = 0;
 const unsigned char OBSTACLE = 255;
-const unsigned char UNEXPLORED = 20;
-const unsigned char UNSET = 20;
+const unsigned char UNEXPLORED = 50;
+const unsigned char UNSET = 50;
 const unsigned char BACKGROUND = 0;
 const unsigned char FOREGROUND = 255;
 
@@ -44,7 +44,7 @@ const int ROBOT_MAP_ORIGIN_X = ROBOT_MAP_WIDTH/2;
 const int ROBOT_MAP_ORIGIN_Y = ROBOT_MAP_HEIGHT/2;
 const CImg <unsigned char> NO_BACKGROUND(ROBOT_MAP_WIDTH, ROBOT_MAP_HEIGHT, 1, 1, FOREGROUND);
 
-const long MAX_NODES = 100;
+const long MAX_NODES = 20;
 
 double sqr(double x){
 	return pow(x, 2);
@@ -253,7 +253,16 @@ class SRGNode{
 			std::cout << "local top left: (" << localTopLeftX << "," << localTopLeftY << ")\n";
 
 			cimg_forXY(lsr, x, y){
-				
+				int prospectX = localTopLeftX+x;
+				int prospectY = localTopLeftY+y;
+				unsigned char currentValue = globalMap->operator()(prospectX, prospectY);
+				if (currentValue == FREE){
+					lsr(x,y) = FREE;
+				}else if (currentValue == OBSTACLE){
+					if (lsr(x,y) == UNEXPLORED){
+						lsr(x,y) = OBSTACLE;
+					}
+				}
 			}
 
 			std::cout << "Finished updating lsr\n";
@@ -293,8 +302,18 @@ class SRGNode{
 			std::cout << "local top left: (" << localTopLeftX << "," << localTopLeftY << ")\n";
 
 			cimg_forXY(lsr, x, y){
-				if (lsr(x, y) == OBSTACLE || lsr(x,y) == FREE){
-					globalMap->operator()(localTopLeftX+x, localTopLeftY+y) = lsr(x,y);
+				int prospectX = localTopLeftX+x;
+				int prospectY = localTopLeftY+y;
+				unsigned char currentValue = globalMap->operator()(prospectX, prospectY);
+				if (currentValue == OBSTACLE){
+					if (lsr(x, y) == FREE){
+						globalMap->operator()(prospectX, prospectY) = lsr(x,y);
+					}
+
+				}else if (currentValue == UNEXPLORED){
+					if (lsr(x, y) == OBSTACLE || lsr(x,y) == FREE){
+						globalMap->operator()(prospectX, prospectY) = lsr(x,y);
+					}
 				}
 			}
 			std::cout << "Finished updating global map\n";
@@ -569,6 +588,8 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 		}*/
 
 		robot->nodes++;
+
+		std::cout << "Iterations done: " << robot->nodes << "\n";
 	}
 
 	switch(robot->state){
@@ -607,7 +628,6 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 			robot->state =  READY;
 			break;
 		case STOPPED:
-			robot->map.display();
 			break;
 		//Go To Position.. Considered an atomic operation.. Cannot be stopped anywhere here..
 		case TURNING:
@@ -633,6 +653,9 @@ class MSRG{
 			msrg->Tick(world);
 			if (msrg->debug){
 				msrg->DebugInformation();
+			}
+			if (msrg->robots[0]->state == STOPPED && msrg->displayedResults){
+				return 1;
 			}
 			return 0;
 		}
@@ -711,6 +734,7 @@ class MSRG{
 							current = current->children[0];
 						}
 					}
+					robots[i]->map.display();
 				}
 				displayedResults = true;
 			}
@@ -720,7 +744,6 @@ class MSRG{
 		void Tick(World* world){
 		}
 
-	protected:
 		std::vector<Robot*> robots;
 		bool debug;
 };
