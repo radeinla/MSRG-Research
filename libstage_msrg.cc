@@ -13,6 +13,8 @@
 using namespace Stg;
 using namespace cimg_library;
 
+const long MAX_ITERATIONS = 1000;
+
 //Robot states
 const int READY = 0;
 const int TURNING = 1;
@@ -28,6 +30,8 @@ const unsigned char BACKGROUND = 255;
 const unsigned char FOREGROUND = 0;
 const unsigned char STREL_SET = 255;
 const unsigned char STREL_UNSET = 0;
+const unsigned char STREL_SET_COLOR[] = {STREL_SET};
+const unsigned char STREL_UNSET_COLOR[] = {STREL_UNSET};
 
 const double PI = 3.14159;
 const double TWO_PI = PI*2;
@@ -47,8 +51,6 @@ const int ROBOT_MAP_ORIGIN_X = ROBOT_MAP_WIDTH/2;
 const int ROBOT_MAP_ORIGIN_Y = ROBOT_MAP_HEIGHT/2;
 const int POLAR_UNIT = 1.41421;
 const CImg <unsigned char> NO_BACKGROUND(ROBOT_MAP_WIDTH, ROBOT_MAP_HEIGHT, 1, 1, FOREGROUND);
-
-const long MAX_ITERATIONS = 100;
 
 double sqr(double x){
 	return pow(x, 2);
@@ -114,13 +116,7 @@ class SRGNode{
 		int globalMapHeight;
 		std::vector <double*> lirRaffle;
 
-		SRGNode(SRGNode* parent, Pose pose, CImg <unsigned char>* globalMap, int globalMapWidth, int globalMapHeight) : parent(parent), pose(pose), radius(0.25), globalMap(globalMap), globalMapWidth(globalMapWidth), globalMapHeight(globalMapHeight){
-			int robotRadiusCorrected = floor(radius*ROBOT_MAP_RESOLUTION);
-			int robotBoundingBoxSize = robotRadiusCorrected*2;
-			robotCircular = CImg <unsigned char>(robotBoundingBoxSize, robotBoundingBoxSize);
-			robotCircular = STREL_UNSET;
-			unsigned char color[] = {STREL_SET};
-			robotCircular.draw_circle(robotBoundingBoxSize/2, robotBoundingBoxSize/2, robotRadiusCorrected, color, 1, 1);
+		SRGNode(SRGNode* parent, Pose pose, CImg <unsigned char>* globalMap, int globalMapWidth, int globalMapHeight) : parent(parent), pose(pose), radius(0.30), globalMap(globalMap), globalMapWidth(globalMapWidth), globalMapHeight(globalMapHeight){
 		}
 
 		bool inPerceptionRange(double globalX, double globalY){
@@ -341,15 +337,27 @@ class SRGNode{
 //			globalMap->display();
 		}
 
+		//only emulates erosion using distance transform..
 		void calculate_lrr(){
 			std::cout << "Calculating lrr\n";
 			lrr = CImg <unsigned char> (lsr);
+
 			cimg_forXY(lrr, x, y){
 				if (lrr(x, y) == UNSET){
 					lrr(x, y) = STREL_UNSET;
 				}
 			}
-			lrr.erode(robotCircular);
+
+			CImg <double> lrrDist(lrr);
+			lrrDist.distance(STREL_UNSET);
+
+			cimg_forXY(lrr, x, y){
+				if (lrr(x,y) == STREL_SET){
+					if (lrrDist(x,y) <= radius*ROBOT_MAP_RESOLUTION){
+						lrr(x,y) = STREL_UNSET;
+					}
+				}
+			}
 
 			std::cout << "Finished calculating lrr\n";
 
@@ -583,6 +591,7 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 //		if (robot->iterations%10 == 0){
 //			robot->map.display();
 //		}
+		//robot->map.display();
 	}
 
 	switch(robot->state){
@@ -632,6 +641,7 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 	}
 
 	robot->UpdateLastVelocity();
+
 
 	return 0;
 }
