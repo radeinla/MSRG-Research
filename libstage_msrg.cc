@@ -447,7 +447,14 @@ class SRGNode{
 					double* coordinates = new double[2];
 					coordinates[0] = globalCoordinateX;
 					coordinates[1] = globalCoordinateY;
-					lirRaffle.push_back(coordinates);
+					double d = distance(x,y, ROBOT_MAP_ORIGIN_X, ROBOT_MAP_ORIGIN_Y);
+					int freq = 1;
+					if (distanceFromLF(x,y) <= (Rp*0.3)*ROBOT_MAP_RESOLUTION){
+						freq = 10;
+					}
+					for (int i = 0; i < freq; i++){
+						lirRaffle.push_back(coordinates);
+					}
 				}
 			}
 
