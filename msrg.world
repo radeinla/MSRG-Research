@@ -25,7 +25,7 @@ floorplan
 kephera
 (
   name "msrg0"
-  pose [ 0 38.5 0 0 ]
+  pose [ 0 0 0 0 ]
 #  pose [ -2 15.3 0 0 ]
 )
 

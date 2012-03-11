@@ -364,33 +364,8 @@ class SRGNode{
 			}
 
 
-			/*for (int i = 0; i < 10; i++){
-				CImg <double> lrrDistFromFree(lrr);
-				lrrDistFromFree.distance(STREL_UNSET, 0);
-				cimg_forXY(lrr, x, y){
-					if (lrr(x,y) == STREL_SET){
-						if (lrrDistFromFree(x,y) <= 0.2*ROBOT_MAP_RESOLUTION){
-							lrr(x,y) = STREL_UNSET;
-						}
-					}
-				}
-
-				lrrDistFromFree = CImg<unsigned char>(lrr);
-				lrrDistFromFree.distance(STREL_SET, 0);
-
-				cimg_forXY(lrr, x, y){
-					if (lrr(x,y) == STREL_UNSET){
-						if (lrrDistFromFree(x,y) <= 0.2*ROBOT_MAP_RESOLUTION){
-							lrr(x,y) = STREL_SET;
-						}
-					}
-				}
-
-			}
-			std::cout << "Showing closed lrr\n";
-			lrr.display();*/
 			CImg <double> lrrDist(lrr);
-			lrrDist.distance(STREL_UNSET, 0);
+			lrrDist.distance(STREL_UNSET);
 
 			cimg_forXY(lrr, x, y){
 				if (lrr(x,y) == STREL_SET){
