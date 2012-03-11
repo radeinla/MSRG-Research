@@ -1,5 +1,5 @@
 include "map.inc"
-include "kephera.inc"
+include "msrg.inc"
 
 paused 1
 quit_time 0
@@ -22,20 +22,20 @@ floorplan
   bitmap "msrg.png"
 )
 
-kephera
+msrg
 (
   name "msrg0"
   pose [ 0 0 0 0 ]
 #  pose [ -2 15.3 0 0 ]
 )
 
-#kephera
+#msrg
 #(
 #  name "msrg1"
 #  pose [ 3 18 0 180 ]
 #)
 
-#kephera
+#msrg
 #(
 #  name "msrg2"
 #  pose [ 5 19 0 0 ]

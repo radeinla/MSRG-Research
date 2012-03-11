@@ -13,7 +13,7 @@
 using namespace Stg;
 using namespace cimg_library;
 
-const long MAX_ITERATIONS = 1000;
+const long MAX_ITERATIONS = 2000;
 
 //Robot states
 const int READY = 0;
@@ -440,7 +440,7 @@ class SRGNode{
 			lirRaffle.clear();
 
 			cimg_forXY(distanceFromLF, x, y){
-				if (lrr(x,y) == BACKGROUND && distanceFromLF(x,y) <= Rp*0.4*ROBOT_MAP_RESOLUTION){
+				if (lrr(x,y) == BACKGROUND && distanceFromLF(x,y) <= (Rp-radius)*ROBOT_MAP_RESOLUTION){
 					lir(x, y) = BACKGROUND;
 					double globalCoordinateX = toGlobalCoordinateX(x);
 					double globalCoordinateY = toGlobalCoordinateY(y);
@@ -527,7 +527,8 @@ class Robot{
 
 		bool IsMovingForward(){
 			Velocity v = position->GetVelocity();
-			return !((fabs(lastVelocity.x) > fabs(v.x)  && fabs(v.x) == 0));
+			std::cout << "last: " << lastVelocity.x << " current: " << v.x << "\n";
+			return !((fabs(lastVelocity.x)+0.01 > fabs(v.x)  && fabs(v.x) == 0));
 		}
 
 		void StopMoving(){
