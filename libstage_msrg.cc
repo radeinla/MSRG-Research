@@ -44,7 +44,7 @@ const double Rp = 2.0;
 const double Rc = 3*Rp;
 
 const double ROBOT_MAP_RESOLUTION = 100;
-const double OBSTACLE_DILATION_MAX_DISTANCE = 10;
+const double OBSTACLE_DILATION_MAX_DISTANCE = 20;
 const int LRR_EROSION_EPSILON = 10;
 const int ROBOT_MAP_HEIGHT = (int)ceil(Rp*ROBOT_MAP_RESOLUTION*2)+1;
 const int ROBOT_MAP_WIDTH = (int)ceil(Rp*ROBOT_MAP_RESOLUTION*2)+1;
@@ -236,25 +236,27 @@ class SRGNode{
 //			std::cout << "local top left: (" << localTopLeftX << "," << localTopLeftY << ")\n";
 
 			cimg_forXY(lsr, x, y){
-				int prospectX = localTopLeftX+x;
-				int prospectY = localTopLeftY+y;
-				if (isValidXCoordinate(prospectX) && isValidYCoordinate(prospectY)){
-					unsigned char currentValue = globalMap->operator()(prospectX, prospectY);
-	/*				if (currentValue != UNEXPLORED){
-						if (lsr(x,y) != UNEXPLORED){
-							lsr(x,y) = currentValue;
+				if (distance(ROBOT_MAP_ORIGIN_X, ROBOT_MAP_ORIGIN_Y, x, y) <= Rp*ROBOT_MAP_RESOLUTION){
+					int prospectX = localTopLeftX+x;
+					int prospectY = localTopLeftY+y;
+					if (isValidXCoordinate(prospectX) && isValidYCoordinate(prospectY)){
+						unsigned char currentValue = globalMap->operator()(prospectX, prospectY);
+						/*if (currentValue != UNEXPLORED){
+							if (lsr(x,y) != UNEXPLORED){
+								lsr(x,y) = currentValue;
+							}
+						}*/
+						if (currentValue == FREE){
+							lsr(x,y) = FREE;
+						}else if (currentValue == OBSTACLE){
+							if (lsr(x,y) == UNEXPLORED){
+								lsr(x,y) = OBSTACLE;
+							}
 						}
-					}*/
-					if (currentValue == FREE){
-						lsr(x,y) = FREE;
-					}else if (currentValue == OBSTACLE){
-						if (lsr(x,y) == UNEXPLORED){
-							lsr(x,y) = OBSTACLE;
-						}
+						//	if (lsr(x, y) == OBSTACLE || lsr(x,y) == FREE){
+						//		globalMap->operator()(prospectX, prospectY) = lsr(x,y);
+						//	}
 					}
-					//	if (lsr(x, y) == OBSTACLE || lsr(x,y) == FREE){
-					//		globalMap->operator()(prospectX, prospectY) = lsr(x,y);
-					//	}
 				}
 			}
 
@@ -438,7 +440,7 @@ class SRGNode{
 			lirRaffle.clear();
 
 			cimg_forXY(distanceFromLF, x, y){
-				if (lrr(x,y) == BACKGROUND && distanceFromLF(x,y) <= Rp*0.4*ROBOT_MAP_RESOLUTION && distanceFromLF(x,y) > 0 && distanceFromUnexplored(x,y)-POLAR_UNIT <= distanceFromLF(x,y) && distanceFromObstacle(x,y) > distanceFromLF(x,y) && distance(x,y,ROBOT_MAP_ORIGIN_X, ROBOT_MAP_ORIGIN_Y) > radius*ROBOT_MAP_RESOLUTION){
+				if (lrr(x,y) == BACKGROUND && distanceFromLF(x,y) <= Rp*0.4*ROBOT_MAP_RESOLUTION){
 					lir(x, y) = BACKGROUND;
 					double globalCoordinateX = toGlobalCoordinateX(x);
 					double globalCoordinateY = toGlobalCoordinateY(y);
