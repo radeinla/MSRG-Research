@@ -44,6 +44,7 @@ const double Rp = 2.0;
 const double Rc = 3*Rp;
 
 const double ROBOT_MAP_RESOLUTION = 100;
+const double OBSTACLE_DILATION_MAX_DISTANCE = 10;
 const int LRR_EROSION_EPSILON = 10;
 const int ROBOT_MAP_HEIGHT = (int)ceil(Rp*ROBOT_MAP_RESOLUTION*2)+1;
 const int ROBOT_MAP_WIDTH = (int)ceil(Rp*ROBOT_MAP_RESOLUTION*2)+1;
@@ -116,31 +117,12 @@ class SRGNode{
 		int globalMapHeight;
 		std::vector <double*> lirRaffle;
 
-		SRGNode(SRGNode* parent, Pose pose, CImg <unsigned char>* globalMap, int globalMapWidth, int globalMapHeight) : parent(parent), pose(pose), radius(0.50), globalMap(globalMap), globalMapWidth(globalMapWidth), globalMapHeight(globalMapHeight){
+		SRGNode(SRGNode* parent, Pose pose, CImg <unsigned char>* globalMap, int globalMapWidth, int globalMapHeight) : parent(parent), pose(pose), radius(0.40), globalMap(globalMap), globalMapWidth(globalMapWidth), globalMapHeight(globalMapHeight){
 		}
 
 		bool inPerceptionRange(double globalX, double globalY){
 			double dist = distance(pose.x, pose.y, globalX, globalY);
 			return InBetween(dist, 0, Rp);
-		}
-
-		bool inLSR(double globalX, double globalY){
-			if (!inPerceptionRange(globalX, globalY)){
-				return false;
-			}
-			double localPose = WorldAngle360(atan2(globalY-pose.y, globalX-pose.x));
-			for (unsigned int i = 0; i < bearings.size(); i++){
-				double halfSpan = (fov[i]/2)+1;
-				double fromAngle360 = WorldAngle360(bearings[i]-WorldAngle(halfSpan));
-				double toAngle360 = WorldAngle360(bearings[i]+WorldAngle(halfSpan));
-
-				if (WolrdAngle360Between(localPose, fromAngle360, toAngle360)){
-					if (!InBetween(distance(pose.x, pose.y, globalX, globalY), 0, ranges[i])){
-						return false;
-					}
-				}
-			}
-			return true;
 		}
 
 		double toGlobalCoordinateX(int mapX){
@@ -182,7 +164,10 @@ class SRGNode{
 		}
 
 		bool inLRR(double globalX, double globalY){
-			if (!inLSR(globalX, globalY)){
+			int localMapCoordinateX = toLocalMapCoordinateX(globalX);
+			int localMapCoordinateY = toLocalMapCoordinateY(globalY);
+
+			if (!inMapLSR(localMapCoordinateX, localMapCoordinateY)){
 				return false;
 			}
 			return inMapLRR(toLocalMapCoordinateX(globalX), toLocalMapCoordinateY(globalY));
@@ -253,13 +238,32 @@ class SRGNode{
 			cimg_forXY(lsr, x, y){
 				int prospectX = localTopLeftX+x;
 				int prospectY = localTopLeftY+y;
-				unsigned char currentValue = globalMap->operator()(prospectX, prospectY);
-				if (currentValue == FREE){
-					lsr(x,y) = FREE;
-				}else if (currentValue == OBSTACLE){
-					if (lsr(x,y) == UNEXPLORED){
-						lsr(x,y) = OBSTACLE;
+				if (isValidXCoordinate(prospectX) && isValidYCoordinate(prospectY)){
+					unsigned char currentValue = globalMap->operator()(prospectX, prospectY);
+	/*				if (currentValue != UNEXPLORED){
+						if (lsr(x,y) != UNEXPLORED){
+							lsr(x,y) = currentValue;
+						}
+					}*/
+					if (currentValue == FREE){
+						lsr(x,y) = FREE;
+					}else if (currentValue == OBSTACLE){
+						if (lsr(x,y) == UNEXPLORED){
+							lsr(x,y) = OBSTACLE;
+						}
 					}
+					//	if (lsr(x, y) == OBSTACLE || lsr(x,y) == FREE){
+					//		globalMap->operator()(prospectX, prospectY) = lsr(x,y);
+					//	}
+				}
+			}
+
+			CImg <double> distanceFromObstacles(lsr);
+			distanceFromObstacles.distance(OBSTACLE);
+
+			cimg_forXY(distanceFromObstacles, x, y){
+				if (distanceFromObstacles(x, y) <= OBSTACLE_DILATION_MAX_DISTANCE){
+					lsr(x,y) = OBSTACLE;
 				}
 			}
 
@@ -301,9 +305,16 @@ class SRGNode{
 				}
 			}
 
-			std::cout << "Finished calculating lsr\n";
+			CImg <double> distanceFromObstacles(lsr);
+			distanceFromObstacles.distance(OBSTACLE);
 
-			update_lsr();
+			cimg_forXY(distanceFromObstacles, x, y){
+				if (distanceFromObstacles(x, y) <= OBSTACLE_DILATION_MAX_DISTANCE){
+					lsr(x,y) = OBSTACLE;
+				}
+			}
+
+			std::cout << "Finished calculating lsr\n";
 
 //			std::cout << "Showing lsr\n";
 //			lsr.display();
@@ -321,15 +332,17 @@ class SRGNode{
 			cimg_forXY(lsr, x, y){
 				int prospectX = localTopLeftX+x;
 				int prospectY = localTopLeftY+y;
-				unsigned char currentValue = globalMap->operator()(prospectX, prospectY);
-				if (currentValue == OBSTACLE){
-					if (lsr(x, y) == FREE){
-						globalMap->operator()(prospectX, prospectY) = lsr(x,y);
-					}
+				if (isValidXCoordinate(prospectX) && isValidYCoordinate(prospectY)){
+					unsigned char currentValue = globalMap->operator()(prospectX, prospectY);
+					if (currentValue == OBSTACLE){
+						if (lsr(x, y) == FREE){
+							globalMap->operator()(prospectX, prospectY) = FREE;
+						}
 
-				}else if (currentValue == UNEXPLORED){
-					if (lsr(x, y) == OBSTACLE || lsr(x,y) == FREE){
-						globalMap->operator()(prospectX, prospectY) = lsr(x,y);
+					}else if (currentValue == UNEXPLORED){
+						if (lsr(x, y) == OBSTACLE || lsr(x,y) == FREE){
+							globalMap->operator()(prospectX, prospectY) = lsr(x,y);
+						}
 					}
 				}
 			}
@@ -350,16 +363,54 @@ class SRGNode{
 				}
 			}
 
+
+			/*for (int i = 0; i < 10; i++){
+				CImg <double> lrrDistFromFree(lrr);
+				lrrDistFromFree.distance(STREL_UNSET, 0);
+				cimg_forXY(lrr, x, y){
+					if (lrr(x,y) == STREL_SET){
+						if (lrrDistFromFree(x,y) <= 0.2*ROBOT_MAP_RESOLUTION){
+							lrr(x,y) = STREL_UNSET;
+						}
+					}
+				}
+
+				lrrDistFromFree = CImg<unsigned char>(lrr);
+				lrrDistFromFree.distance(STREL_SET, 0);
+
+				cimg_forXY(lrr, x, y){
+					if (lrr(x,y) == STREL_UNSET){
+						if (lrrDistFromFree(x,y) <= 0.2*ROBOT_MAP_RESOLUTION){
+							lrr(x,y) = STREL_SET;
+						}
+					}
+				}
+
+			}
+			std::cout << "Showing closed lrr\n";
+			lrr.display();*/
 			CImg <double> lrrDist(lrr);
-			lrrDist.distance(STREL_UNSET);
+			lrrDist.distance(STREL_UNSET, 0);
 
 			cimg_forXY(lrr, x, y){
 				if (lrr(x,y) == STREL_SET){
-					if (lrrDist(x,y) <= radius*ROBOT_MAP_RESOLUTION){
+					if (lrrDist(x,y) <= (radius)*ROBOT_MAP_RESOLUTION && distance(ROBOT_MAP_ORIGIN_X, ROBOT_MAP_ORIGIN_Y, x, y) > (radius)*ROBOT_MAP_RESOLUTION){
 						lrr(x,y) = STREL_UNSET;
 					}
 				}
 			}
+
+			CImg <double> lrrConnected(lrr);
+			lrrConnected.label();
+			unsigned char origin_color = lrrConnected(ROBOT_MAP_ORIGIN_X, ROBOT_MAP_ORIGIN_Y);
+			cimg_forXY(lrr, x, y){
+				if (lrr(x,y) == STREL_SET){
+					if (lrrConnected(x,y) != origin_color){
+						lrr(x,y) = STREL_UNSET;
+					}
+				}
+			}
+
 
 			std::cout << "Finished calculating lrr\n";
 
@@ -403,13 +454,16 @@ class SRGNode{
 			CImg <double> distanceFromUnexplored(lsr);
 			distanceFromUnexplored.distance(UNEXPLORED);
 
+			CImg <double> distanceFromObstacle(lsr);
+			distanceFromObstacle.distance(OBSTACLE);
+
 			//distanceFromLF.display();
 			//distanceFromUnexplored.display();
 
 			lirRaffle.clear();
 
 			cimg_forXY(distanceFromLF, x, y){
-				if (lrr(x,y) == BACKGROUND && distanceFromLF(x,y) <= Rp*ROBOT_MAP_RESOLUTION && distanceFromLF(x,y) > 0 && distanceFromUnexplored(x,y)-5 <= distanceFromLF(x,y)){
+				if (lrr(x,y) == BACKGROUND && distanceFromLF(x,y) <= Rp*0.4*ROBOT_MAP_RESOLUTION && distanceFromLF(x,y) > 0 && distanceFromUnexplored(x,y)-POLAR_UNIT <= distanceFromLF(x,y) && distanceFromObstacle(x,y) > distanceFromLF(x,y) && distance(x,y,ROBOT_MAP_ORIGIN_X, ROBOT_MAP_ORIGIN_Y) > radius*ROBOT_MAP_RESOLUTION){
 					lir(x, y) = BACKGROUND;
 					double globalCoordinateX = toGlobalCoordinateX(x);
 					double globalCoordinateY = toGlobalCoordinateY(y);
@@ -541,18 +595,26 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 		std::vector <double> fov;
 
 		std::cout << "Global Coordinates: " << currentPose.x << "," << currentPose.y << "\n";
-	
-		for (unsigned int i = 0; i < sensors.size(); i+=3){
-			double perception = sensors[i].ranges[0];
-			for (unsigned int j = i; j < i + 3; j++){
-				if (sensors[j].ranges[0] < perception){
-					perception = sensors[j].ranges[0];
+		
+		int q = 0;
+		for (unsigned int i = 0; i < sensors.size(); i++){
+			if (sensors[i].fov != 0){
+				double perception = sensors[i].ranges[0];
+				q++;
+				int j = i+1;
+				while (j < sensors.size() && sensors[j].fov == 0){
+					if (sensors[j].ranges[0] < perception){
+						perception = sensors[j].ranges[0];
+					}
+					j++;
+					q++;
 				}
+				ranges.push_back(perception);
+				bearings.push_back(WorldAngle360(currentPose.a+sensors[i].pose.a));
+				fov.push_back(HumanAngle(sensors[i].fov));
 			}
-			ranges.push_back(perception);
-			bearings.push_back(WorldAngle360(currentPose.a+sensors[i].pose.a));
-			fov.push_back(HumanAngle(sensors[i].fov));
 		}
+		std::cout << "Processed " << q << " readings\n";
 
 		SRGNode* currentNode;
 
@@ -596,9 +658,9 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 
 		std::cout << "Iterations done: " << robot->iterations << "\n";
 
-//		if (robot->iterations%10 == 0){
-//			robot->map.display();
-//		}
+		if (robot->iterations%100 == 0){
+			robot->map.display();
+		}
 		//robot->map.display();
 	}
 

@@ -2,13 +2,14 @@ include "map.inc"
 include "kephera.inc"
 
 paused 1
+quit_time 0
 
 window
 (
-  size [ 400.00 500.00 ]
+  size [ 400.00 430.00 ]
   center [ 0.0 0.0 ]
   rotate [ 0 0 ]
-  scale 10
+  scale 100
 
   show_data 1
 )
@@ -17,14 +18,14 @@ floorplan
 (
   name "msrg_floorplan"
   pose [ 0 0 0 0 ]
-  size [ 12.5 40.0 1.0 ]
+  size [ 25.0 80.0 1.0 ]
   bitmap "msrg.png"
 )
 
 kephera
 (
   name "msrg0"
-  pose [ 2.5 3 0 0 ]
+  pose [ 0 38.5 0 0 ]
 #  pose [ -2 15.3 0 0 ]
 )
 
