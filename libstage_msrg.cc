@@ -527,7 +527,6 @@ class Robot{
 
 		bool IsMovingForward(){
 			Velocity v = position->GetVelocity();
-			std::cout << "last: " << lastVelocity.x << " current: " << v.x << "\n";
 			return !((fabs(lastVelocity.x)+0.01 > fabs(v.x)  && fabs(v.x) == 0));
 		}
 
