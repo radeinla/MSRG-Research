@@ -100,10 +100,26 @@ double distance(double x1, double y1, double x2, double y2){
 	return d;
 }
 
+bool areCoordinatesSorted(int* coord1, int* coord2){
+	if (coord1[0] < coord2[0]){
+		return true;
+	}else if (coord1[0] > coord2[0]){
+		return false;
+	}else if (coord1[1] < coord2[1]){
+		return true;
+	}else if (coord1[1] > coord2[1]){
+		return false;
+	}else{
+		return false;
+	}
+}
+
 class SRGNode{
 	public:
 		SRGNode* parent;
 		std::vector <SRGNode*> children;
+		std::vector <SRGNode*> bridges;
+		bool bridge;
 		Pose pose;
 		std::vector <double> fov;
 		std::vector <double> bearings;
@@ -117,15 +133,25 @@ class SRGNode{
 		int globalMapWidth;
 		int globalMapHeight;
 		std::vector <double*> lirRaffle;
+		std::vector <int*> lsrGlobalMapCoordinates;
 		int fromRobot;
 		int fromRobotIndex;
 
 		SRGNode(SRGNode* parent, Pose pose, std::vector <double> bearings, std::vector <double> fov, std::vector <meters_t> ranges,
-			CImg <unsigned char>* globalMap, int globalMapWidth, int globalMapHeight, int fromRobot, int fromRobotIndex) : 
+			CImg <unsigned char>* globalMap, int globalMapWidth, int globalMapHeight, int fromRobot, int fromRobotIndex, bool bridge) : 
 			parent(parent), pose(pose), bearings(bearings), fov(fov), ranges(ranges),
 			radius(0.40), globalMap(globalMap), globalMapWidth(globalMapWidth), globalMapHeight(globalMapHeight),
-			fromRobot(fromRobot), fromRobotIndex(fromRobotIndex) {
+			fromRobot(fromRobot), fromRobotIndex(fromRobotIndex), bridge(bridge) {
 			
+		}
+
+		bool isLSRCoupled(SRGNode* other){
+			for (int i = 0; i < other->lsrGlobalMapCoordinates.size(); i++){
+				if (binary_search(lsrGlobalMapCoordinates.begin(), lsrGlobalMapCoordinates.end(), other->lsrGlobalMapCoordinates[i], areCoordinatesSorted)){
+					return true;
+				}
+			}
+			return false;
 		}
 
 		bool isLIRSharedWith(SRGNode* other){
@@ -213,7 +239,7 @@ class SRGNode{
 		std::string ToString(){
 			std::stringstream ss;
 			ss << "Node (" << pose.x << "," << pose.y << ")\nReadings:\n";
-			for (unsigned int i = 0; i < bearings.size(); i++){
+			for (int i = 0; i < bearings.size(); i++){
 				ss << HumanAngle(bearings[i]) << "[" << fov[i] << "]" << ":" << ranges[i] << "\n";
 			}
 
@@ -254,6 +280,29 @@ class SRGNode{
 			return false;
 		}
 
+		void store_lsr(){
+			lsrGlobalMapCoordinates.clear();
+			std::cout << "max bag size: " << ROBOT_MAP_HEIGHT*ROBOT_MAP_WIDTH << "\n";
+			std::cout << "empty lsr? " << lsrGlobalMapCoordinates.size() << "\n";
+
+			cimg_forXY(lsr, x, y){
+				if (lsr(x,y) == BACKGROUND){
+					double globalX = toGlobalCoordinateX(x);
+					double globalY = toGlobalCoordinateY(y);
+					int globalMapX = toGlobalMapCoordinateX(globalX);
+					int globalMapY = toGlobalMapCoordinateY(globalY);
+					int* coordinates = new int[2];
+					coordinates[0] = globalMapX;
+					coordinates[1] = globalMapY;
+					lsrGlobalMapCoordinates.push_back(coordinates);
+				}
+			}
+
+			std::cout << "filled lsr? " << lsrGlobalMapCoordinates.size() << "\n";
+
+			sort(lsrGlobalMapCoordinates.begin(), lsrGlobalMapCoordinates.end(), areCoordinatesSorted);
+		}
+
 		void update_lsr(){
 			std::cout << "Updating LSR\n";
 
@@ -264,6 +313,7 @@ class SRGNode{
 			int localTopLeftY = globalMapY-(ROBOT_MAP_HEIGHT/2);
 
 //			std::cout << "local top left: (" << localTopLeftX << "," << localTopLeftY << ")\n";
+
 
 			cimg_forXY(lsr, x, y){
 				if (distance(ROBOT_MAP_ORIGIN_X, ROBOT_MAP_ORIGIN_Y, x, y) <= Rp*ROBOT_MAP_RESOLUTION){
@@ -299,6 +349,8 @@ class SRGNode{
 				}
 			}
 
+			store_lsr();
+
 			std::cout << "Finished updating lsr\n";
 
 //			std::cout << "Showing updated lsr\n";
@@ -313,7 +365,7 @@ class SRGNode{
 			const unsigned char color_free[] = {FREE};
 			const unsigned char color_obstacle[] = {OBSTACLE};
 
-			for (unsigned int i = 0; i < bearings.size(); i++){
+			for (int i = 0; i < bearings.size(); i++){
 				double R = ranges[i] * ROBOT_MAP_RESOLUTION;
 				double halfSpan = (fov[i]/2)+1;
 				double theta1 = WorldAngle360(bearings[i]-WorldAngle(halfSpan)) - (ONE_DEGREE_RADIAN/2);
@@ -345,6 +397,8 @@ class SRGNode{
 					lsr(x,y) = OBSTACLE;
 				}
 			}
+
+			store_lsr();
 
 			std::cout << "Finished calculating lsr\n";
 
@@ -517,14 +571,15 @@ class Robot{
 		int mapHeight;
 		int mapWidth;
 		int gpaCoupling;
-		unsigned int id;
+		int geaCoupling;
+		int id;
 		bool synchronized;
 
 		//Global Pose..
 		Pose targetPose;
-		Robot(unsigned int id, int mapHeight, int mapWidth, std::vector <Robot*>* allRobots) :
+		Robot(int id, int mapHeight, int mapWidth, std::vector <Robot*>* allRobots) :
 			id(id), srg(NULL), current(NULL), state(STARTUP), startup(true), iterations(0), mapHeight(mapHeight), mapWidth(mapWidth),
-			backtracking(false), allRobots(allRobots), gpaCoupling(-1), synchronized(false){
+			backtracking(false), allRobots(allRobots), gpaCoupling(-1), synchronized(false), geaCoupling(-1){
 			map = CImg <unsigned char>(mapWidth, mapHeight);
 			map = UNEXPLORED;
 		}
@@ -622,6 +677,10 @@ class Robot{
 
 
 int PositionUpdate( ModelPosition* model, Robot* robot ){
+	/*std::cout << "GPA Couplings:\n";
+	for (int i = 0; i < robot->allRobots->size(); i++){
+		std::cout << i << ": " << robot->allRobots->operator[](i)->gpaCoupling << "\n";
+	}*/
 	if (robot->state == STORE_POSITION){
 		std::cout << "storing position..\n";
 		Pose currentPose = robot->position->GetGlobalPose();
@@ -633,7 +692,7 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 		std::cout << "Global Coordinates: " << currentPose.x << "," << currentPose.y << "\n";
 		
 		int q = 0;
-		for (unsigned int i = 0; i < sensors.size(); i++){
+		for (int i = 0; i < sensors.size(); i++){
 			if (sensors[i].fov != 0){
 				double perception = sensors[i].ranges[0];
 				q++;
@@ -657,10 +716,11 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 		if (robot->backtracking){
 			currentNode = robot->backtrackTarget;
 		}else if (robot->iterations == 0){
-			currentNode = new SRGNode(NULL, currentPose, bearings, fov, ranges, &(robot->map), robot->mapWidth, robot->mapHeight, robot->id, robot->srgList.size());
+			currentNode = new SRGNode(NULL, currentPose, bearings, fov, ranges, &(robot->map), robot->mapWidth, robot->mapHeight, robot->id, robot->srgList.size(), false);
 			robot->srgList.push_back(currentNode);
+			robot->targetPose = currentPose;
 		}else{
-			currentNode = new SRGNode(robot->current, currentPose, bearings, fov, ranges, &(robot->map), robot->mapWidth, robot->mapHeight, robot->id, robot->srgList.size());
+			currentNode = new SRGNode(robot->current, currentPose, bearings, fov, ranges, &(robot->map), robot->mapWidth, robot->mapHeight, robot->id, robot->srgList.size(), false);
 			robot->srgList.push_back(currentNode);
 		}
 
@@ -687,6 +747,7 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 		}
 
 		robot->current = currentNode;
+		std::cout << "Size of lsr bag: " << robot->current->lsrGlobalMapCoordinates.size() << "\n";
 
 		robot->iterations++;
 
@@ -698,6 +759,7 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 		//robot->map.display();
 	}
 
+	int geaCouplingId = 0;
 	switch(robot->state){
 		case READY:
 			//what's next?
@@ -738,7 +800,7 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 				return 0;
 			}
 			std::cout << "Synchronizing..\n";
-			for (unsigned int i = 0; i < robot->allRobots->size(); i++){
+			for (int i = 0; i < robot->allRobots->size(); i++){
 				if (i != robot->id){
 					Robot* r = robot->allRobots->operator[](i);
 					if (r->gpaCoupling == robot->gpaCoupling){
@@ -749,52 +811,88 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 				}
 			}
 			
-			if (robot->synchronized){
-				std::cout << "Synchronized!!!!\n";
-			}else{
-				for (unsigned int i = 0; i < robot->allRobots->size(); i++){
-					for (unsigned int j = 0; j < robot->allRobots->size(); j++){
-						if (i != j){
-							Robot* r1 = robot->allRobots->operator[](i);
-							Robot* r2 = robot->allRobots->operator[](j);
-							r1->updateGlobalMapFromOthers(&(r2->map));
-						}
+			std::cout << "GPA Couplings:\n";
+			for (int i = 0; i < robot->allRobots->size(); i++){
+				std::cout << i << ": " << robot->allRobots->operator[](i)->gpaCoupling << "\n";
+			}
+
+			for (int i = 0; i < robot->allRobots->size(); i++){
+				for (int j = 0; j < robot->allRobots->size(); j++){
+					if (i != j){
+						Robot* r1 = robot->allRobots->operator[](i);
+						Robot* r2 = robot->allRobots->operator[](j);
+						r1->updateGlobalMapFromOthers(&(r2->map));
 					}
 				}
-				std::cout << "Finding connection....\n";
-				bool foundConnection = false;
-				for (unsigned int i = 0; !foundConnection && i < robot->allRobots->size(); i++){
-					for (unsigned int j = 0; !foundConnection && j < robot->allRobots->size(); j++){
-						if (i != j){
-							Robot* r1 = robot->allRobots->operator[](i);
-							Robot* r2 = robot->allRobots->operator[](j);
+			}
 
-							for (int k = 0; !foundConnection && k < r1->srgList.size();k++){
-								for (int l = 0; !foundConnection && l < r2->srgList.size();l++){
-									if (r1->srgList[k]->isLIRSharedWith(r2->srgList[l])){
-										std::cout << "Found connection!!!!";
-										//connect the two maps
-										foundConnection = true;
-									}
+			for (int i = 0; i < robot->allRobots->size(); i++){
+				for (int j = 0; j < robot->allRobots->size(); j++){
+					if (i != j){
+						Robot* r1 = robot->allRobots->operator[](i);
+						Robot* r2 = robot->allRobots->operator[](j);
+						if (r1->gpaCoupling == r2->gpaCoupling && r1->gpaCoupling == robot->gpaCoupling){
+//							std::cout << "Checking if LSR coupled: " << r1->name << " and " << r2->name << "\n";
+							if (r1->current->isLSRCoupled(r2->current)){
+//								std::cout << "LSR COUPLED: " << r1->name << " and " << r2->name << "\n";
+								if (r1->geaCoupling == -1 && r2->geaCoupling == -1){
+									r1->geaCoupling = geaCouplingId;
+									r2->geaCoupling = geaCouplingId;
+									geaCouplingId++;
+								}else if (r1->geaCoupling != -1){
+									r2->geaCoupling = r1->geaCoupling;
+								}else if (r2->gpaCoupling != -1){
+									r1->geaCoupling = r2->geaCoupling;
 								}
 							}
-							
 						}
 					}
 				}
-				for (unsigned int i = 0; i < robot->allRobots->size(); i++){
-					Robot* r = robot->allRobots->operator[](i);
-					r->map.display();
-					r->synchronized = true;
+			}
+
+			std::cout << "GEA Couplings:\n";
+			for (int i = 0; i < robot->allRobots->size(); i++){
+				Robot* r = robot->allRobots->operator[](i);
+				if (robot->gpaCoupling == r->gpaCoupling){
+					std::cout << i << ": " << r->geaCoupling << "\n";
 				}
+			}
+				
+			/*std::cout << "Finding connection....\n";
+			bool foundConnection = false;
+			for (int i = 0; !foundConnection && i < robot->allRobots->size(); i++){
+				for (int j = 0; !foundConnection && j < robot->allRobots->size(); j++){
+					if (i != j){
+						Robot* r1 = robot->allRobots->operator[](i);
+						Robot* r2 = robot->allRobots->operator[](j);
+						for (int k = 0; !foundConnection && k < r1->srgList.size();k++){
+							for (int l = 0; !foundConnection && l < r2->srgList.size();l++){
+								if (r1->srgList[k]->isLIRSharedWith(r2->srgList[l])){
+									std::cout << "Found connection!!!!";
+									//connect the two maps
+									foundConnection = true;
+								}
+							}
+						}
+							
+					}
+				}
+			}*/
+			for (int i = 0; i < robot->allRobots->size(); i++){
+				Robot* r = robot->allRobots->operator[](i);
+//				r->map.display();
+				r->synchronized = true;
 			}
 			break;
 		case STORE_POSITION:
+			std::cout << "Current Coupling of " << robot->name << ": " << robot->gpaCoupling << "\n";
 			if (robot->gpaCoupling != -1){
 				std::cout << "Stored position, trying to synchronize..\n";
 				robot->synchronized = false;
+				robot->geaCoupling = -1;
 				robot->state = SYNCHRONIZING;
 			}else{
+				std::cout << "Is not coupled....\n";
 				robot->state =  READY;
 			}
 			break;
@@ -838,12 +936,15 @@ class MSRG{
 		}
 
 		void compute_gpa_coupling(){
-			for (unsigned int i = 0; i < robots.size(); i++){
+			/*std::cout << "Computing couplings..\n";
+			for (int i = 0; i < robots.size(); i++){
+				std::cout << "current couplings for " << robots[i]->name << ": " << robots[i]->gpaCoupling << "\n";
+				std::cout << "current position: " << robots[i]->targetPose.x << ", " << robots[i]->targetPose.y << "\n";
 				robots[i]->gpaCoupling = -1;
-			}
+			}*/
 			int couplingId = 0;
-			for (unsigned int i = 0; i < robots.size(); i++){
-				for (unsigned int j = 0; j < robots.size(); j++){
+			for (int i = 0; i < robots.size(); i++){
+				for (int j = 0; j < robots.size(); j++){
 					if (j != i){
 						if (robots[i]->targetPose.Distance2D(robots[j]->targetPose) <= 2*Rp){
 							if (robots[i]->gpaCoupling == -1 && robots[j]->gpaCoupling == -1){
@@ -868,7 +969,7 @@ class MSRG{
 			Size floorplanSize = floorplanGeom.size;
 			int mapHeight = floorplanSize.y*ROBOT_MAP_RESOLUTION;
 			int mapWidth = floorplanSize.x*ROBOT_MAP_RESOLUTION;
-			for (unsigned int idx = 0; ; idx++){
+			for (int idx = 0; ; idx++){
 				std::stringstream name;
 				name << "msrg" << idx;
 				
@@ -891,6 +992,7 @@ class MSRG{
 				robot->ranger = ranger;
 				robot->ranger->Subscribe();
 				robot->lastVelocity = robot->position->GetVelocity();
+				robot->targetPose = robot->position->GetGlobalPose();
 				robots.push_back(robot);
 			}
 
@@ -898,9 +1000,9 @@ class MSRG{
 		}
 
 		void ComputeWifiConnectivity(){
-			/*for (unsigned int i = 0; i < robots.size(); i++){
+			/*for (int i = 0; i < robots.size(); i++){
 				robots[i]->robotsInWifiRange.clear();
-				for (unsigned int j = 0; j < robots.size(); j++){
+				for (int j = 0; j < robots.size(); j++){
 					if (j != i){
 						Pose iPose = robots[i]->position->GetPose();
 						Pose jPose = robots[j]->position->GetPose();
@@ -914,7 +1016,7 @@ class MSRG{
 
 		void DebugInformation(){
 			if (robots[0]->state == STOPPED && !displayedResults){
-				for (unsigned int i = 0; i < robots.size(); i++){
+				for (int i = 0; i < robots.size(); i++){
 					std::cout << "Robot " << i << ":\nIn range: ";
 					for (std::vector<int>::iterator iter = robots[i]->robotsInWifiRange.begin(); iter != robots[i]->robotsInWifiRange.end(); ++iter){
 						std::cout << "msrg" << *iter << ", ";
@@ -938,10 +1040,6 @@ class MSRG{
 
 		//actual logic
 		void Tick(World* world){
-			std::cout << "Couplings:\n";
-			for (int i = 0; i < robots.size(); i++){
-				std::cout << i << ": " << robots[i]->gpaCoupling << "\n";
-			}
 		}
 
 		std::vector<Robot*> robots;

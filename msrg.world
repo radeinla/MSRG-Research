@@ -38,5 +38,11 @@ msrg
 msrg
 (
   name "msrg2"
-  pose [ 4 38 0 0 ]
+  pose [ 10 38 0 0 ]
+)
+
+msrg
+(
+  name "msrg3"
+  pose [ 0 34 0 0 ]
 )
