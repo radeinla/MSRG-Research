@@ -25,18 +25,18 @@ floorplan
 msrg
 (
   name "msrg0"
-  pose [ 0 0 0 0 ]
+  pose [ 2 38 0 0 ]
 #  pose [ -2 15.3 0 0 ]
 )
 
-#msrg
-#(
-#  name "msrg1"
-#  pose [ 3 18 0 180 ]
-#)
+msrg
+(
+  name "msrg1"
+  pose [ 0 38 0 180 ]
+)
 
-#msrg
-#(
-#  name "msrg2"
-#  pose [ 5 19 0 0 ]
-#)
+msrg
+(
+  name "msrg2"
+  pose [ 4 38 0 0 ]
+)
