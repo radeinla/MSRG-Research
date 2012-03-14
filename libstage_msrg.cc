@@ -56,6 +56,7 @@ const int ROBOT_MAP_ORIGIN_X = ROBOT_MAP_WIDTH/2;
 const int ROBOT_MAP_ORIGIN_Y = ROBOT_MAP_HEIGHT/2;
 const int POLAR_UNIT = 1.41421;
 const CImg <unsigned char> NO_BACKGROUND(ROBOT_MAP_WIDTH, ROBOT_MAP_HEIGHT, 1, 1, FOREGROUND);
+const CImg <unsigned char> NO_FOREGROUND(ROBOT_MAP_WIDTH, ROBOT_MAP_HEIGHT, 1, 1, BACKGROUND);
 
 double sqr(double x){
 	return pow(x, 2);
@@ -176,7 +177,50 @@ class SRGNode{
 			
 		}*/
 
+		bool isCoupled(SRGNode* other, int what){
+			int globalOriginX1 = toGlobalMapCoordinateX(toGlobalCoordinateX(ROBOT_MAP_ORIGIN_X));
+			int globalOriginY1 = toGlobalMapCoordinateY(toGlobalCoordinateY(ROBOT_MAP_ORIGIN_Y));
+			int globalOriginX2 = other->toGlobalMapCoordinateX(other->toGlobalCoordinateX(ROBOT_MAP_ORIGIN_X));
+			int globalOriginY2 = other->toGlobalMapCoordinateY(other->toGlobalCoordinateY(ROBOT_MAP_ORIGIN_Y));
+
+			std::cout << "(" <<globalOriginX1 << "," << globalOriginY1 << ")\n";
+			std::cout << "(" <<globalOriginX2 << "," << globalOriginY2 << ")\n";
+
+			int deltaX = globalOriginX2-globalOriginX1;
+			int deltaY = globalOriginY1-globalOriginY2;
+
+			int shiftX = deltaX;
+			int shiftY = deltaY;
+
+			CImg <unsigned char> a;
+			CImg <unsigned char> b;
+
+			if (what == 0){
+				a = CImg <unsigned char>(lsr);
+				b = CImg <unsigned char>(other->lsr);
+			}else if (what == 1){
+				a = CImg <unsigned char>(lrr);
+				b = CImg <unsigned char>(other->lrr);
+			}
+			a /= 255;
+			a /= 255;
+			b *= 255;
+			b *= 255;
+
+			a.shift(-1*shiftX, shiftY);
+			b.shift(shiftX, -1*shiftY);
+			a &= b;
+
+			//lsr1.display();
+
+			return (a != (unsigned char)0);
+			
+		}
+
 		bool isLSRCoupled(SRGNode* other){
+			/*bool coupled = isCoupled(other, 0);
+			std::cout << "Coupled LSR? " << coupled << "\n";
+			return coupled;*/
 			for (int i = 0; i < other->lsrGlobalMapCoordinates.size(); i++){
 				if (binary_search(lsrGlobalMapCoordinates.begin(), lsrGlobalMapCoordinates.end(), other->lsrGlobalMapCoordinates[i], areCoordinatesSorted)){
 					return true;
@@ -186,31 +230,12 @@ class SRGNode{
 		}
 
 		bool isLRRCoupled(SRGNode* other){
+			/*bool coupled = isCoupled(other, 1);
+			std::cout << "Coupled LRR? " << coupled << "\n";
+			return coupled;*/
 			for (int i = 0; i < other->lrrGlobalMapCoordinates.size(); i++){
 				if (binary_search(lrrGlobalMapCoordinates.begin(), lrrGlobalMapCoordinates.end(), other->lrrGlobalMapCoordinates[i], areCoordinatesSorted)){
 					return true;
-				}
-			}
-			return false;
-		}
-
-		bool isLIRSharedWith(SRGNode* other){
-			cimg_forXY(lir, x, y){
-				cimg_forXY(other->lir, x2, y2){
-					if (lir(x,y) == BACKGROUND && other->lir(x2,y2) == BACKGROUND){
-						double globalX1 = toGlobalCoordinateX(x);
-						double globalX2 = other->toGlobalCoordinateX(x2);
-						double globalY1 = toGlobalCoordinateY(y);
-						double globalY2 = other->toGlobalCoordinateY(y2);
-						int globalMapX1 = toGlobalMapCoordinateX(globalX1);
-						int globalMapX2 = other->toGlobalMapCoordinateX(globalX2);
-						int globalMapY1 = toGlobalMapCoordinateY(globalY1);
-						int globalMapY2 = other->toGlobalMapCoordinateY(globalY2);
-						
-						if (globalMapX1 == globalMapX2 && globalMapY1 == globalMapY2){
-							return true;
-						}
-					}
 				}
 			}
 			return false;
@@ -698,9 +723,9 @@ class Robot{
 					unconnectedNodes.push_back(coordToInsert.node);
 					allNodes.insert(coordToInsert);
 				}else{
-					(*existing).node->calculate_lrr();
+					/*(*existing).node->calculate_lrr();
 					(*existing).node->calculate_lf();
-					(*existing).node->calculate_lir();
+					(*existing).node->calculate_lir();*/
 				}
 			}
 			for (int i = 0; i < r2->unconnectedNodes.size(); i++){
@@ -712,9 +737,9 @@ class Robot{
 					unconnectedNodes.push_back(coordToInsert.node);
 					allNodes.insert(coord);
 				}else{
-					(*existing).node->calculate_lrr();
+					/*(*existing).node->calculate_lrr();
 					(*existing).node->calculate_lf();
-					(*existing).node->calculate_lir();
+					(*existing).node->calculate_lir();*/
 				}
 			}
 		}
@@ -850,7 +875,7 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 		currentNode->fov = fov;
 		
 		if (robot->backtracking){
-//			currentNode->update_lsr();
+			currentNode->update_lsr();
 		}else{
 			currentNode->calculate_lsr();
 		}
@@ -920,6 +945,7 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 		case SYNCHRONIZING:
 			if (robot->synchronized){
 				if (robot->gpaCoupling == -1){
+					robot->synchronized = false;
 					robot->state = READY;
 				}else{
 					bool hasMaster = false;
@@ -938,6 +964,7 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 								}
 								std::cout << "Electing " << r1->name << " as master..\n";
 								robot->state = READY;
+								robot->synchronized = false;
 								robot->master = true;
 							}
 							break;
@@ -955,7 +982,6 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 						}
 					}
 				}
-				robot->master = false;
 			}
 			
 			std::cout << "GPA Couplings:\n";
@@ -1089,10 +1115,10 @@ class MSRG{
 		}
 
 		void compute_gpa_coupling(){
-			//std::cout << "Computing couplings..\n";
+			std::cout << "Computing couplings..\n";
 			for (int i = 0; i < robots.size(); i++){
-				/*std::cout << "current couplings for " << robots[i]->name << ": " << robots[i]->gpaCoupling << "\n";
-				std::cout << "current position: " << robots[i]->targetPose.x << ", " << robots[i]->targetPose.y << "\n";*/
+				std::cout << "current couplings for " << robots[i]->name << ": " << robots[i]->gpaCoupling << "\n";
+				//std::cout << "current position: " << robots[i]->targetPose.x << ", " << robots[i]->targetPose.y << "\n";
 				robots[i]->gpaCoupling = -1;
 			}
 			int couplingId = 0;
@@ -1224,3 +1250,4 @@ int main(int argc, char* argv[]){
 
 	return 0;
 }
+
