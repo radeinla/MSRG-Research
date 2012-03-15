@@ -870,6 +870,12 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 			robot->srgList.push_back(currentNode);
 		}
 
+		//within bounding box
+		//find node with LRR intersection with current node
+		//check if directly bridgeable, create bridge..
+		//if indirectly bridgeable, create intermediate node..
+		//add bridges..
+
 		currentNode->bearings = bearings;
 		currentNode->ranges = ranges;
 		currentNode->fov = fov;
@@ -909,11 +915,18 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 	int geaCouplingId = 0;
 	switch(robot->state){
 		case READY:
-			//what's next?
-			//dummy command..
 			if (robot->startup || robot->iterations <= MAX_ITERATIONS){
-				//TODO: get a random configuration and set target..
 				if (robot->current->lirRaffle.size() == 0){
+					/**
+					 * TODO: search space Rp-radius
+					 * if node found with non-empty LIR, check if already connected
+					 * if connected
+					 *   check nodes within Rp-radius of node
+					 *   find path to node, move one node closer to selected node
+					 * if not connected, check if nodes within Rp-radius of unconnectedNode have intersection of LRR
+					 *   after, plan a path to node with intersection of LRR with unconnectedNode
+					 *   move one node closer to selected node
+					**/
 					if (robot->current->parent == NULL){
 						std::cout << "Back at starting position, stopping because no more LIR!!!!\n";
 						robot->backtracking = false;
