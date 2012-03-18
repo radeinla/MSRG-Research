@@ -508,8 +508,8 @@ class SRGNode{
 
 			std::cout << "Finished calculating lsr\n";
 
-			std::cout << "Showing lsr\n";
-			lsr.display();
+//			std::cout << "Showing lsr\n";
+//			lsr.display();
 		}
 
 		void update_global_map(){
@@ -548,8 +548,8 @@ class SRGNode{
 
 //			std::cout << "Finished updating global map\n";
 
-			std::cout << "Showing global map\n";
-			globalMap->display();
+//			std::cout << "Showing global map\n";
+//			globalMap->display();
 		}
 
 		//only emulates erosion using distance transform..
@@ -592,8 +592,8 @@ class SRGNode{
 
 //			std::cout << "Finished calculating lrr\n";
 
-			std::cout << "Showing lrr\n";
-			lrr.display();
+//			std::cout << "Showing lrr\n";
+//			lrr.display();
 		}
 
 		void calculate_lf(){
@@ -610,8 +610,8 @@ class SRGNode{
 			}
 //			std::cout << "Finished calculating lf\n";
 
-			std::cout << "Showing lf\n";
-			lf.display();
+//			std::cout << "Showing lf\n";
+//			lf.display();
 		}
 
 		void calculate_lir(){
@@ -654,8 +654,8 @@ class SRGNode{
 
 //			std::cout << "Finished calculating lir\n";
 
-			std::cout << "Showing lir\n";
-			lir.display();
+//			std::cout << "Showing lir\n";
+//			lir.display();
 
 		}
 
@@ -883,7 +883,6 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 				int j = i+1;
 				while (j < sensors.size() && sensors[j].fov == 0){
 					if (sensors[j].ranges[0] < perception){
-						std::cout << "Found an obstacle!\n";
 						perception = sensors[j].ranges[0];
 					}
 					j++;
