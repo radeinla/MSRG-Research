@@ -811,25 +811,9 @@ define msrg_sensor_array ranger (
 define msrg position
 (
   color "blue"
-  block
-  (
-    points 9
-    point[0] [ -0.075 -0.025 ]
-    point[1] [ -0.075 0.025 ]
-    point[2] [ -0.06 0.05 ]
-    point[3] [ 0 0.065 ]
-    point[4] [ 0.040 0.045 ]
-    point[5] [ 0.055 0 ]
-    point[6] [ 0.040 -0.045 ]
-    point[7] [ 0 -0.065 ]
-    point[8] [ -0.06 -0.050 ]
-    z [ 0 0.24 ]
-  )
-
   msrg_sensor_array( pose [0 0 -0.03 0] )
 
-  size [0.3 0.3 0.2]
-  obstacle_return 1
-  ranger_return 1
+  obstacle_return 1.0
+  ranger_return 1.0
 )
 
