@@ -12,6 +12,14 @@
 #include "stage.hh"
 #include "CImg.h"
 
+/**BEGIN MYSQL TESTING INCLUDES**/
+#include "mysql_connection.h"
+#include <cppconn/driver.h>
+#include <cppconn/exception.h>
+#include <cppconn/resultset.h>
+#include <cppconn/statement.h>
+#include <cppconn/prepared_statement.h>
+/**END MYSQL TESTING INCLUDES**/
 using namespace Stg;
 using namespace cimg_library;
 
@@ -154,21 +162,87 @@ class SRGNode{
 		std::vector <int*> lrrGlobalMapCoordinates;
 		int fromRobot;
 		int fromRobotIndex;
+		int owner_db_id;
+		int db_id;
 
-		SRGNode(SRGNode* parent, Pose pose, std::vector <double> bearings, std::vector <double> fov, std::vector <meters_t> ranges,
+		SRGNode(int owner_db_id, SRGNode* parent, Pose pose, std::vector <double> bearings, std::vector <double> fov, std::vector <meters_t> ranges,
 			CImg <unsigned char>* globalMap, int globalMapWidth, int globalMapHeight, int fromRobot, int fromRobotIndex, bool bridge) : 
 			parent(parent), pose(pose), bearings(bearings), fov(fov), ranges(ranges),
 			radius(0.40), globalMap(globalMap), globalMapWidth(globalMapWidth), globalMapHeight(globalMapHeight),
-			fromRobot(fromRobot), fromRobotIndex(fromRobotIndex), bridge(bridge) {
-			
+			fromRobot(fromRobot), fromRobotIndex(fromRobotIndex), bridge(bridge), owner_db_id(owner_db_id) {
+			try{
+				sql::Driver *driver;
+				sql::Connection *con;
+					
+				driver = get_driver_instance();
+				con = driver->connect("tcp://127.0.0.1:3306", "msrg", "msrg");
+				con->setSchema("msrg");
+
+				
+				sql::ResultSet *res;
+				sql::PreparedStatement *pstmt;
+
+				pstmt = con->prepareStatement("INSERT INTO srgs (robot_id) VALUES (?)");
+				pstmt->setInt(1, owner_db_id);
+				pstmt->execute();
+
+				delete pstmt;
+
+				pstmt = con->prepareStatement("SELECT LAST_INSERT_ID() as srg_db_id");
+
+				res = pstmt->executeQuery();
+
+				res->next();
+				db_id = res->getInt("srg_db_id");
+
+
+				delete res;
+				delete pstmt;
+
+			}catch(sql::SQLException &e){
+				std::cout << "Exception!!! " << e.what() << "\n";
+				abort();
+			}
 		}
 
 		//Copy constructor
-		SRGNode(SRGNode* nodeToCopy, double newRadius, CImg<unsigned char>* newGlobalMap, int newGlobalMapWidth, int newGlobalMapHeight) : 
+		SRGNode(int owner_db_id, SRGNode* nodeToCopy, double newRadius, CImg<unsigned char>* newGlobalMap, int newGlobalMapWidth, int newGlobalMapHeight) : 
 			parent(NULL), pose(nodeToCopy->pose), bearings(nodeToCopy->bearings), fov(nodeToCopy->fov), ranges(nodeToCopy->ranges),
 			radius(nodeToCopy->radius), globalMap(newGlobalMap), globalMapWidth(newGlobalMapWidth), globalMapHeight(newGlobalMapHeight),
-			fromRobot(nodeToCopy->fromRobot), fromRobotIndex(nodeToCopy->fromRobotIndex), bridge(false) {
-			//calculate_lsr();
+			fromRobot(nodeToCopy->fromRobot), fromRobotIndex(nodeToCopy->fromRobotIndex), bridge(false), owner_db_id(owner_db_id){
+			try{
+				sql::Driver *driver;
+				sql::Connection *con;
+					
+				driver = get_driver_instance();
+				con = driver->connect("tcp://127.0.0.1:3306", "msrg", "msrg");
+				con->setSchema("msrg");
+
+				
+				sql::ResultSet *res;
+				sql::PreparedStatement *pstmt;
+
+				pstmt = con->prepareStatement("INSERT INTO srgs (robot_id) VALUES (?)");
+				pstmt->setInt(1, owner_db_id);
+				pstmt->execute();
+
+				delete pstmt;
+
+				pstmt = con->prepareStatement("SELECT LAST_INSERT_ID() as srg_db_id");
+
+				res = pstmt->executeQuery();
+
+				res->next();
+				db_id = res->getInt("srg_db_id");
+
+
+				delete res;
+				delete pstmt;
+
+			}catch(sql::SQLException &e){
+				std::cout << "Exception!!! " << e.what() << "\n";
+				abort();
+			}
 		}
 
 		bool isLSRCoupled(SRGNode* other){
@@ -277,6 +351,7 @@ class SRGNode{
 		}
 
 		void store_lsr(){
+			/*
 			for (int i = 0; i < lsrGlobalMapCoordinates.size(); i++){
 				delete [] lsrGlobalMapCoordinates[i];
 			}
@@ -293,11 +368,50 @@ class SRGNode{
 				}
 			}
 
-			sort(lsrGlobalMapCoordinates.begin(), lsrGlobalMapCoordinates.end(), areCoordinatesSorted);
+			sort(lsrGlobalMapCoordinates.begin(), lsrGlobalMapCoordinates.end(), areCoordinatesSorted);*/
+			
+			try{
+				sql::Driver *driver;
+				sql::Connection *con;
+					
+				driver = get_driver_instance();
+				con = driver->connect("tcp://127.0.0.1:3306", "msrg", "msrg");
+				con->setSchema("msrg");
+
+				sql::PreparedStatement *pstmt;
+
+				pstmt = con->prepareStatement("DELETE FROM lsr WHERE srg_id = ?");
+				pstmt->setInt(1, db_id);
+				pstmt->execute();
+
+				delete pstmt;
+				
+				cimg_forXY(lsr, x, y){
+					if (lsr(x,y) == BACKGROUND){
+						int globalMapX = localMapXToGlobalMapCoordinateX(x);
+						int globalMapY = localMapYToGlobalMapCoordinateY(y);
+
+						pstmt = con->prepareStatement("INSERT INTO lsr (srg_id, global_map_x, global_map_y) VALUES (?, ?, ?)");
+						pstmt->setInt(1, db_id);
+						pstmt->setInt(2, globalMapX);
+						pstmt->setInt(3, globalMapY);
+						pstmt->execute();
+
+						delete pstmt;
+
+					}
+				}
+
+				delete con;
+
+			}catch(sql::SQLException &e){
+				std::cout << "Exception!!! " << e.what() << "\n";
+				abort();
+			}
 		}
 
 		void store_lsr_obstacles(){
-			for (int i = 0; i < lsrObstacleGlobalMapCoordinates.size(); i++){
+			/*for (int i = 0; i < lsrObstacleGlobalMapCoordinates.size(); i++){
 				delete [] lsrObstacleGlobalMapCoordinates[i];
 			}
 			lsrObstacleGlobalMapCoordinates.clear();
@@ -313,7 +427,45 @@ class SRGNode{
 				}
 			}
 
-			sort(lsrObstacleGlobalMapCoordinates.begin(), lsrObstacleGlobalMapCoordinates.end(), areCoordinatesSorted);
+			sort(lsrObstacleGlobalMapCoordinates.begin(), lsrObstacleGlobalMapCoordinates.end(), areCoordinatesSorted);*/
+			try{
+				sql::Driver *driver;
+				sql::Connection *con;
+					
+				driver = get_driver_instance();
+				con = driver->connect("tcp://127.0.0.1:3306", "msrg", "msrg");
+				con->setSchema("msrg");
+
+				sql::PreparedStatement *pstmt;
+
+				pstmt = con->prepareStatement("DELETE FROM lsr_obstacles WHERE srg_id = ?");
+				pstmt->setInt(1, db_id);
+				pstmt->execute();
+
+				delete pstmt;
+				
+				cimg_forXY(lsr, x, y){
+					if (lsr(x,y) == BACKGROUND){
+						int globalMapX = localMapXToGlobalMapCoordinateX(x);
+						int globalMapY = localMapYToGlobalMapCoordinateY(y);
+
+						pstmt = con->prepareStatement("INSERT INTO lsr_obstacles (srg_id, global_map_x, global_map_y) VALUES (?, ?, ?)");
+						pstmt->setInt(1, db_id);
+						pstmt->setInt(2, globalMapX);
+						pstmt->setInt(3, globalMapY);
+						pstmt->execute();
+
+						delete pstmt;
+
+					}
+				}
+
+				delete con;
+
+			}catch(sql::SQLException &e){
+				std::cout << "Exception!!! " << e.what() << "\n";
+				abort();
+			}
 		}
 
 		void store_lrr(){
@@ -334,6 +486,7 @@ class SRGNode{
 			}
 
 			sort(lrrGlobalMapCoordinates.begin(), lrrGlobalMapCoordinates.end(), areCoordinatesSorted);
+			//TODO:sqlize
 		}
 
 		void calculate_node_data(){
@@ -448,6 +601,7 @@ class SRGNode{
 					}
 				}
 			}
+			//TODO:sqlize
 
 //			std::cout << "Finished updating global map\n";
 
@@ -626,11 +780,12 @@ class Robot{
 		double radius;
 		bool synchronized;
 		bool master;
+		int db_id;
 
 		//Global Pose..
 		Pose targetPose;
 		Robot(int id, int mapHeight, int mapWidth, std::vector <Robot*>* allRobots) :
-			id(id), srg(NULL), current(NULL), state(STARTUP), startup(true), iterations(0), mapHeight(mapHeight), mapWidth(mapWidth),
+			id(id), srg(NULL), current(NULL), state(STORE_POSITION), startup(true), iterations(0), mapHeight(mapHeight), mapWidth(mapWidth),
 			allRobots(allRobots), gpaCoupling(-1), synchronized(false), geaCoupling(-1), master(false), radius(0.4){
 			map = CImg <unsigned char>(mapWidth, mapHeight);
 			map = UNEXPLORED;
@@ -665,7 +820,7 @@ class Robot{
 				SRGNodeCoordinates coord(r2->srgList[i]);
 				std::set<SRGNodeCoordinates, SRGNodeCoordinatesComparator>::iterator existing = allNodes.find(coord);
 				if (existing == allNodes.end()){
-					SRGNode* toInsert = new SRGNode(coord.node, radius, &map, mapWidth, mapHeight);
+					SRGNode* toInsert = new SRGNode(db_id, coord.node, radius, &map, mapWidth, mapHeight);
 					SRGNodeCoordinates coordToInsert(toInsert);
 					unconnectedNodes.push_back(coordToInsert.node);
 					allNodes.insert(coordToInsert);
@@ -679,7 +834,7 @@ class Robot{
 				SRGNodeCoordinates coord(r2->unconnectedNodes[i]);
 				std::set<SRGNodeCoordinates, SRGNodeCoordinatesComparator>::iterator existing = allNodes.find(coord);
 				if (existing == allNodes.end()){
-					SRGNode* toInsert = new SRGNode(coord.node, radius, &map, mapWidth, mapHeight);
+					SRGNode* toInsert = new SRGNode(db_id, coord.node, radius, &map, mapWidth, mapHeight);
 					SRGNodeCoordinates coordToInsert(toInsert);
 					unconnectedNodes.push_back(coordToInsert.node);
 					allNodes.insert(coord);
@@ -768,49 +923,7 @@ class Robot{
 
 
 int PositionUpdate( ModelPosition* model, Robot* robot ){
-	//std::cout << "Computing couplings..\n";
-	if (robot->state != STARTUP){
-		for (int i = 0; i < robot->allRobots->size(); i++){
-			Robot* r = robot->allRobots->at(i);
-			//std::cout << "current couplings for " << r->name << ": " << r->gpaCoupling << "\n";
-			std::cout << "current targets: " << robot->allRobots->at(i)->targetPose.x << ", " << robot->allRobots->at(i)->targetPose.y << "\n";
-			r->gpaCoupling = -1*(i+1);
-		}
-		int couplingId = 0;
-		for (int i = 0; i < robot->allRobots->size(); i++){
-			for (int j = 0; j < robot->allRobots->size(); j++){
-				if (i!=j){
-					Robot* r1 = robot->allRobots->at(i);
-					Robot* r2 = robot->allRobots->at(j);
-					if (r1->state != STOPPED && r2->state != STOPPED){ 
-						std::cout << "checking for coupling: " << r1->name << " and " << r2->name << "\n";
-						if (r1->targetPose.Distance2D(r2->targetPose) <= 2*Rp){
-							std::cout << "less than 2 Rp.. Grouping together\n";
-							if (r1->gpaCoupling < 0 && r2->gpaCoupling < 0){
-								std::cout << "both negative values!\n";
-								r1->gpaCoupling = couplingId;
-								r2->gpaCoupling = couplingId;
-								couplingId++;
-							}else if (r1->gpaCoupling > 0){
-								r2->gpaCoupling = r1->gpaCoupling;
-							}else if (r2->gpaCoupling > 0){
-								r1->gpaCoupling = r2->gpaCoupling;
-							}
-							/*std::cout << "GPA Couplings:\n";
-							for (int k = 0; k < robot->allRobots->size(); k++){
-								std::cout << k << ": " << robot->allRobots->at(k)->gpaCoupling << "\n";
-							}*/
-						}
-					}
-				}
-			}
-		}
-		std::cout << "GPA Couplings:\n";
-		for (int i = 0; i < robot->allRobots->size(); i++){
-			std::cout << i << ": " << robot->allRobots->at(i)->gpaCoupling << "\n";
-		}
-	}
-	if (robot->state == STORE_POSITION || robot->state == STARTUP){
+	if (robot->state == STORE_POSITION){
 		std::cout << "storing position..\n";
 		Pose currentPose = robot->position->GetGlobalPose();
 		std::vector <ModelRanger::Sensor> sensors = robot->ranger->GetSensorsMutable();
@@ -852,12 +965,12 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 		if (backtracked){
 			currentNode = (*existing).node;
 		}else if (robot->iterations == 0){
-			currentNode = new SRGNode(NULL, currentPose, bearings, fov, ranges, &(robot->map), robot->mapWidth, robot->mapHeight, robot->id, robot->srgList.size(), false);
+			currentNode = new SRGNode(robot->db_id, NULL, currentPose, bearings, fov, ranges, &(robot->map), robot->mapWidth, robot->mapHeight, robot->id, robot->srgList.size(), false);
 			robot->addNode(currentNode);
 			robot->srgList.push_back(currentNode);
 			robot->targetPose = currentPose;
 		}else{
-			currentNode = new SRGNode(robot->current, currentPose, bearings, fov, ranges, &(robot->map), robot->mapWidth, robot->mapHeight, robot->id, robot->srgList.size(), false);
+			currentNode = new SRGNode(robot->db_id, robot->current, currentPose, bearings, fov, ranges, &(robot->map), robot->mapWidth, robot->mapHeight, robot->id, robot->srgList.size(), false);
 			robot->addNode(currentNode);
 			robot->srgList.push_back(currentNode);
 		}
@@ -925,6 +1038,47 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 			robot->SetTarget(Pose(randomCoordinates[0], randomCoordinates[1],0,0));
 		}
 	}
+
+	//std::cout << "Computing couplings..\n";
+	for (int i = 0; i < robot->allRobots->size(); i++){
+		Robot* r = robot->allRobots->at(i);
+		//std::cout << "current couplings for " << r->name << ": " << r->gpaCoupling << "\n";
+//		std::cout << "current targets: " << robot->allRobots->at(i)->targetPose.x << ", " << robot->allRobots->at(i)->targetPose.y << "\n";
+		r->gpaCoupling = -1*(i+1);
+	}
+	int couplingId = 0;
+	for (int i = 0; i < robot->allRobots->size(); i++){
+		for (int j = 0; j < robot->allRobots->size(); j++){
+			if (i!=j){
+				Robot* r1 = robot->allRobots->at(i);
+				Robot* r2 = robot->allRobots->at(j);
+				if (r1->state != STOPPED && r2->state != STOPPED){ 
+//					std::cout << "checking for coupling: " << r1->name << " and " << r2->name << "\n";
+					if (r1->targetPose.Distance2D(r2->targetPose) <= 2*Rp){
+//						std::cout << "less than 2 Rp.. Grouping together\n";
+						if (r1->gpaCoupling < 0 && r2->gpaCoupling < 0){
+//							std::cout << "both negative values!\n";
+							r1->gpaCoupling = couplingId;
+							r2->gpaCoupling = couplingId;
+							couplingId++;
+						}else if (r1->gpaCoupling > 0){
+							r2->gpaCoupling = r1->gpaCoupling;
+						}else if (r2->gpaCoupling > 0){
+							r1->gpaCoupling = r2->gpaCoupling;
+						}
+						/*std::cout << "GPA Couplings:\n";
+						for (int k = 0; k < robot->allRobots->size(); k++){
+							std::cout << k << ": " << robot->allRobots->at(k)->gpaCoupling << "\n";
+						}*/
+					}
+				}
+			}
+		}
+	}
+/*	std::cout << "GPA Couplings:\n";
+	for (int i = 0; i < robot->allRobots->size(); i++){
+		std::cout << i << ": " << robot->allRobots->at(i)->gpaCoupling << "\n";
+	}*/
 
 	int geaCouplingId = 0;
 	switch(robot->state){
@@ -999,17 +1153,23 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 					Robot* r1 = robot->allRobots->at(i);
 					Robot* r2 = robot->allRobots->at(j);
 					if (r1->gpaCoupling == r2->gpaCoupling && r1->gpaCoupling == robot->gpaCoupling){
+						std::cout << "node counts before " << r1->name << "\n";
+						std::cout << r1->srgList.size() << "\n"; 
+						std::cout << r1->unconnectedNodes.size() << "\n";
+						std::cout << "node counts before " << r2->name << "\n";
+						std::cout << r2->srgList.size() << "\n"; 
+						std::cout << r2->unconnectedNodes.size() << "\n";
 						//std::cout << "synchronizing srgs: " << r1->name << " and " << r2->name << "\n";
 
 						r1->mergeNodesWith(r2);
 						r2->mergeNodesWith(r1);
 
-						/*std::cout << "node counts " << r1->name << "\n";
+						std::cout << "node counts " << r1->name << "\n";
 						std::cout << r1->srgList.size() << "\n"; 
 						std::cout << r1->unconnectedNodes.size() << "\n";
 						std::cout << "node counts " << r2->name << "\n";
 						std::cout << r2->srgList.size() << "\n"; 
-						std::cout << r2->unconnectedNodes.size() << "\n";*/
+						std::cout << r2->unconnectedNodes.size() << "\n";
 					}
 				}
 			}
@@ -1114,31 +1274,64 @@ class MSRG{
 			Size floorplanSize = floorplanGeom.size;
 			int mapHeight = floorplanSize.y*ROBOT_MAP_RESOLUTION;
 			int mapWidth = floorplanSize.x*ROBOT_MAP_RESOLUTION;
-			for (int idx = 0; ; idx++){
-				std::stringstream name;
-				name << "msrg" << idx;
+			try{
+				sql::Driver *driver;
+				sql::Connection *con;
+					
+				driver = get_driver_instance();
+				con = driver->connect("tcp://127.0.0.1:3306", "msrg", "msrg");
+				con->setSchema("msrg");
+				for (int idx = 0; ; idx++){
+					std::stringstream name;
+					name << "msrg" << idx;
 				
-				std::cout << name.str() << "\n";
+					std::cout << name.str() << "\n";
 
-				if ((world->GetModel(name.str())) == NULL){
-					break;
+					if ((world->GetModel(name.str())) == NULL){
+						break;
+					}
+
+					ModelPosition* posmod = reinterpret_cast<ModelPosition*>(world->GetModel(name.str()));
+
+					ModelRanger* ranger = reinterpret_cast<ModelRanger*>(posmod->GetUnusedModelOfType( "ranger" ));
+
+					Robot* robot = new Robot(idx, mapHeight, mapWidth, &robots);
+					robot->name = name.str();
+					robot->position = posmod;
+					robot->position->AddCallback(Model::CB_UPDATE, (model_callback_t)PositionUpdate, robot);
+					robot->position->Subscribe();
+					robot->ranger = ranger;
+					robot->ranger->Subscribe();
+					robot->lastVelocity = robot->position->GetVelocity();
+					robot->targetPose = robot->position->GetGlobalPose();
+
+					sql::ResultSet *res;
+					sql::PreparedStatement *pstmt;
+
+					pstmt = con->prepareStatement("INSERT INTO robots (execution_id) VALUES (?)");
+					pstmt->setInt(1, robot->id);
+					pstmt->execute();
+
+					delete pstmt;
+
+					pstmt = con->prepareStatement("SELECT LAST_INSERT_ID() as robot_db_id");
+
+					res = pstmt->executeQuery();
+
+					res->next();
+
+					robot->db_id = res->getInt("robot_db_id");
+
+
+					delete res;
+					delete pstmt;
+
+					robots.push_back(robot);
 				}
-
-
-				ModelPosition* posmod = reinterpret_cast<ModelPosition*>(world->GetModel(name.str()));
-
-				ModelRanger* ranger = reinterpret_cast<ModelRanger*>(posmod->GetUnusedModelOfType( "ranger" ));
-
-				Robot* robot = new Robot(idx, mapHeight, mapWidth, &robots);
-				robot->name = name.str();
-				robot->position = posmod;
-				robot->position->AddCallback(Model::CB_UPDATE, (model_callback_t)PositionUpdate, robot);
-				robot->position->Subscribe();
-				robot->ranger = ranger;
-				robot->ranger->Subscribe();
-				robot->lastVelocity = robot->position->GetVelocity();
-				robot->targetPose = robot->position->GetGlobalPose();
-				robots.push_back(robot);
+				delete con;
+			}catch (sql::SQLException &e){
+				std::cout << "Exception!!! " << e.what() << "\n";
+				abort();
 			}
 
 			world->AddUpdateCallback(MSRG::Callback, reinterpret_cast<void*>(this));
@@ -1176,7 +1369,34 @@ class MSRG{
 		bool debug;
 };
 
+void drop_create_db(){
+	try{
+		sql::Driver *driver;
+		sql::Connection *con;
+		sql::Statement *stmt;
+		//sql::ResultSet *res;
+		driver = get_driver_instance();
+		con = driver->connect("tcp://127.0.0.1:3306", "msrg", "msrg");
+		stmt = con->createStatement();
+		stmt->executeUpdate("DROP DATABASE IF EXISTS msrg");
+		stmt->executeUpdate("CREATE DATABASE msrg");
+		delete stmt;
+		con->setSchema("msrg");
+		stmt = con->createStatement();
+		stmt->executeUpdate("CREATE TABLE robots (id int(11) NOT NULL PRIMARY KEY AUTO_INCREMENT, execution_id int(11) NOT NULL)");
+		stmt->executeUpdate("CREATE TABLE srgs (id int(11) NOT NULL PRIMARY KEY AUTO_INCREMENT, robot_id int(11) NOT NULL REFERENCES robots(id))");
+		stmt->executeUpdate("CREATE TABLE lsr (srg_id int(11) NOT NULL REFERENCES srgs(id), global_map_x int(11) NOT NULL, global_map_y int(11) NOT NULL, PRIMARY KEY(srg_id,global_map_x,global_map_y), index(global_map_x, global_map_y))");
+		stmt->executeUpdate("CREATE TABLE lsr_obstacles (srg_id int(11) NOT NULL REFERENCES srgs(id), global_map_x int(11) NOT NULL, global_map_y int(11) NOT NULL, PRIMARY KEY(srg_id,global_map_x,global_map_y), index(global_map_x, global_map_y))");
+		delete stmt;
+		delete con;
+	}catch (sql::SQLException &e){
+		std::cout << "Exception!!! " << e.what() << "\n";
+		abort();
+	}
+}
+
 int main(int argc, char* argv[]){
+	drop_create_db();
 	Init( &argc, &argv);
 
 	srand( time(NULL) );
