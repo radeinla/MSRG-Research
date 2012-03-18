@@ -116,6 +116,32 @@ bool areCoordinatesSorted(int* coord1, int* coord2){
 	}
 }
 
+// Returns 1 if the lines intersect, otherwise 0. In addition, if the lines 
+// intersect the intersection point may be stored in the floats i_x and i_y.
+bool get_line_intersection(int p0_x, int p0_y, int p1_x, int p1_y, 
+    int p2_x, int p2_y, int p3_x, int p3_y, int *i_x, int *i_y)
+{
+    float s1_x, s1_y, s2_x, s2_y;
+    s1_x = p1_x - p0_x;     s1_y = p1_y - p0_y;
+    s2_x = p3_x - p2_x;     s2_y = p3_y - p2_y;
+
+    float s, t;
+    s = (-s1_y * (p0_x - p2_x) + s1_x * (p0_y - p2_y)) / (-s2_x * s1_y + s1_x * s2_y);
+    t = ( s2_x * (p0_y - p2_y) - s2_y * (p0_x - p2_x)) / (-s2_x * s1_y + s1_x * s2_y);
+
+    if (s >= 0 && s <= 1 && t >= 0 && t <= 1)
+    {
+        // Collision detected
+        if (i_x != NULL)
+            *i_x = p0_x + (t * s1_x);
+        if (i_y != NULL)
+            *i_y = p0_y + (t * s1_y);
+        return true;
+    }
+
+    return false; // No collision
+}
+
 bool areCoordinatesSortedDouble(double* coord1, double* coord2){
 	if (coord1[0] < coord2[0]){
 		return true;
@@ -151,6 +177,8 @@ class SRGNode{
 		std::vector <double*> lirRaffle;
 		std::vector <int*> lsrGlobalMapCoordinates;
 		std::vector <int*> lsrObstacleGlobalMapCoordinates;
+		std::vector <int*> lsrGlobalMapLinePoints;
+		std::vector <int*> lsrObstacleGlobalMapLinePoints;
 		std::vector <int*> lrrGlobalMapCoordinates;
 		int fromRobot;
 		int fromRobotIndex;
@@ -277,10 +305,27 @@ class SRGNode{
 		}
 
 		void store_lsr(){
-			for (int i = 0; i < lsrGlobalMapCoordinates.size(); i++){
-				delete [] lsrGlobalMapCoordinates[i];
+			lsrGlobalMapLinePoints.clear();
+
+			for (int i = 0; i < ROBOT_MAP_HEIGHT; i++){
+				for (int j = 0; j < ROBOT_MAP_WIDTH; j++){
+					if (lsr(j,i) == BACKGROUND){
+						int j_start = j;
+						while (lsr(j,i) == BACKGROUND && j < ROBOT_MAP_WIDTH){
+							j++;
+						}
+						int j_end = j-1;
+						int* lineCoordinates = new int[4];
+						lineCoordinates[0] = localMapXToGlobalMapCoordinateX(j_start);
+						lineCoordinates[1] = localMapYToGlobalMapCoordinateY(i);
+						lineCoordinates[2] = localMapXToGlobalMapCoordinateX(j_end);
+						lineCoordinates[3] = localMapYToGlobalMapCoordinateY(i);
+						lsrGlobalMapLinePoints.push_back(lineCoordinates);
+					}
+				}
 			}
-			lsrGlobalMapCoordinates.clear();
+
+			/*lsrGlobalMapCoordinates.clear();
 
 			cimg_forXY(lsr, x, y){
 				if (lsr(x,y) == BACKGROUND){
@@ -293,14 +338,30 @@ class SRGNode{
 				}
 			}
 
-			sort(lsrGlobalMapCoordinates.begin(), lsrGlobalMapCoordinates.end(), areCoordinatesSorted);
+			sort(lsrGlobalMapCoordinates.begin(), lsrGlobalMapCoordinates.end(), areCoordinatesSorted);*/
 		}
 
 		void store_lsr_obstacles(){
-			for (int i = 0; i < lsrObstacleGlobalMapCoordinates.size(); i++){
-				delete [] lsrObstacleGlobalMapCoordinates[i];
+			lsrObstacleGlobalMapLinePoints.clear();
+
+			for (int i = 0; i < ROBOT_MAP_HEIGHT; i++){
+				for (int j = 0; j < ROBOT_MAP_WIDTH; j++){
+					if (lsr(j,i) == FOREGROUND){
+						int j_start = j;
+						while (lsr(j,i) == FOREGROUND && j < ROBOT_MAP_WIDTH){
+							j++;
+						}
+						int j_end = j-1;
+						int* lineCoordinates = new int[4];
+						lineCoordinates[0] = localMapXToGlobalMapCoordinateX(j_start);
+						lineCoordinates[1] = localMapYToGlobalMapCoordinateY(i);
+						lineCoordinates[2] = localMapXToGlobalMapCoordinateX(j_end);
+						lineCoordinates[3] = localMapYToGlobalMapCoordinateY(i);
+						lsrObstacleGlobalMapLinePoints.push_back(lineCoordinates);
+					}
+				}
 			}
-			lsrObstacleGlobalMapCoordinates.clear();
+			/*lsrObstacleGlobalMapCoordinates.clear();
 
 			cimg_forXY(lsr, x, y){
 				if (lsr(x,y) == FOREGROUND){
@@ -313,13 +374,10 @@ class SRGNode{
 				}
 			}
 
-			sort(lsrObstacleGlobalMapCoordinates.begin(), lsrObstacleGlobalMapCoordinates.end(), areCoordinatesSorted);
+			sort(lsrObstacleGlobalMapCoordinates.begin(), lsrObstacleGlobalMapCoordinates.end(), areCoordinatesSorted);*/
 		}
 
 		void store_lrr(){
-			for (int i = 0; i < lrrGlobalMapCoordinates.size(); i++){
-				delete [] lrrGlobalMapCoordinates[i];
-			}
 			lrrGlobalMapCoordinates.clear();
 
 			cimg_forXY(lrr, x, y){
@@ -434,7 +492,22 @@ class SRGNode{
 //			std::cout << "top left global map " << localMapXToGlobalMapCoordinateX(0) << ", " << localMapYToGlobalMapCoordinateY(0) << "\n";
 //			std::cout << "top left global " << toGlobalCoordinateX(0) << ", " << toGlobalCoordinateY(0) << "\n";
 
-			for (int i = 0; i < lsrGlobalMapCoordinates.size(); i++){
+			for (int i = 0; i < lsrGlobalMapLinePoints.size(); i++){
+				int* h_points = lsrGlobalMapLinePoints[i];
+				for (int j = h_points[0]; j <= h_points[2]; j++){
+					globalMap->atXY(j, h_points[1]) = FREE;
+				}
+			}
+			for (int i = 0; i < lsrObstacleGlobalMapLinePoints.size(); i++){
+				int* h_points = lsrObstacleGlobalMapLinePoints[i];
+				for (int j = h_points[0]; j <= h_points[2]; j++){
+					if (globalMap->atXY(j, h_points[1]) == UNEXPLORED){
+						globalMap->atXY(j, h_points[1]) = OBSTACLE;
+					}
+				}
+			}
+
+			/*for (int i = 0; i < lsrGlobalMapCoordinates.size(); i++){
 				int* coordinates = lsrGlobalMapCoordinates[i];
 				if (isValidXCoordinate(coordinates[0]) && isValidYCoordinate(coordinates[1])){
 					globalMap->atXY(coordinates[0], coordinates[1]) = FREE;
@@ -447,12 +520,12 @@ class SRGNode{
 						globalMap->atXY(coordinates[0], coordinates[1]) = OBSTACLE;
 					}
 				}
-			}
+			}*/
 
-//			std::cout << "Finished updating global map\n";
+			std::cout << "Finished updating global map\n";
 
-//			std::cout << "Showing global map\n";
-//			globalMap->display();
+			std::cout << "Showing global map\n";
+			globalMap->display();
 		}
 
 		//only emulates erosion using distance transform..
@@ -630,7 +703,7 @@ class Robot{
 		//Global Pose..
 		Pose targetPose;
 		Robot(int id, int mapHeight, int mapWidth, std::vector <Robot*>* allRobots) :
-			id(id), srg(NULL), current(NULL), state(STARTUP), startup(true), iterations(0), mapHeight(mapHeight), mapWidth(mapWidth),
+			id(id), srg(NULL), current(NULL), state(STORE_POSITION), startup(true), iterations(0), mapHeight(mapHeight), mapWidth(mapWidth),
 			allRobots(allRobots), gpaCoupling(-1), synchronized(false), geaCoupling(-1), master(false), radius(0.4){
 			map = CImg <unsigned char>(mapWidth, mapHeight);
 			map = UNEXPLORED;
@@ -768,49 +841,7 @@ class Robot{
 
 
 int PositionUpdate( ModelPosition* model, Robot* robot ){
-	//std::cout << "Computing couplings..\n";
-	if (robot->state != STARTUP){
-		for (int i = 0; i < robot->allRobots->size(); i++){
-			Robot* r = robot->allRobots->at(i);
-			//std::cout << "current couplings for " << r->name << ": " << r->gpaCoupling << "\n";
-			std::cout << "current targets: " << robot->allRobots->at(i)->targetPose.x << ", " << robot->allRobots->at(i)->targetPose.y << "\n";
-			r->gpaCoupling = -1*(i+1);
-		}
-		int couplingId = 0;
-		for (int i = 0; i < robot->allRobots->size(); i++){
-			for (int j = 0; j < robot->allRobots->size(); j++){
-				if (i!=j){
-					Robot* r1 = robot->allRobots->at(i);
-					Robot* r2 = robot->allRobots->at(j);
-					if (r1->state != STOPPED && r2->state != STOPPED){ 
-						std::cout << "checking for coupling: " << r1->name << " and " << r2->name << "\n";
-						if (r1->targetPose.Distance2D(r2->targetPose) <= 2*Rp){
-							std::cout << "less than 2 Rp.. Grouping together\n";
-							if (r1->gpaCoupling < 0 && r2->gpaCoupling < 0){
-								std::cout << "both negative values!\n";
-								r1->gpaCoupling = couplingId;
-								r2->gpaCoupling = couplingId;
-								couplingId++;
-							}else if (r1->gpaCoupling > 0){
-								r2->gpaCoupling = r1->gpaCoupling;
-							}else if (r2->gpaCoupling > 0){
-								r1->gpaCoupling = r2->gpaCoupling;
-							}
-							/*std::cout << "GPA Couplings:\n";
-							for (int k = 0; k < robot->allRobots->size(); k++){
-								std::cout << k << ": " << robot->allRobots->at(k)->gpaCoupling << "\n";
-							}*/
-						}
-					}
-				}
-			}
-		}
-		std::cout << "GPA Couplings:\n";
-		for (int i = 0; i < robot->allRobots->size(); i++){
-			std::cout << i << ": " << robot->allRobots->at(i)->gpaCoupling << "\n";
-		}
-	}
-	if (robot->state == STORE_POSITION || robot->state == STARTUP){
+	if (robot->state == STORE_POSITION){
 		std::cout << "storing position..\n";
 		Pose currentPose = robot->position->GetGlobalPose();
 		std::vector <ModelRanger::Sensor> sensors = robot->ranger->GetSensorsMutable();
@@ -925,6 +956,46 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 			robot->SetTarget(Pose(randomCoordinates[0], randomCoordinates[1],0,0));
 		}
 	}
+	//std::cout << "Computing couplings..\n";
+	for (int i = 0; i < robot->allRobots->size(); i++){
+		Robot* r = robot->allRobots->at(i);
+		//std::cout << "current couplings for " << r->name << ": " << r->gpaCoupling << "\n";
+		//std::cout << "current targets: " << robot->allRobots->at(i)->targetPose.x << ", " << robot->allRobots->at(i)->targetPose.y << "\n";
+		r->gpaCoupling = -1*(i+1);
+	}
+	int couplingId = 0;
+	for (int i = 0; i < robot->allRobots->size(); i++){
+		for (int j = 0; j < robot->allRobots->size(); j++){
+			if (i!=j){
+				Robot* r1 = robot->allRobots->at(i);
+				Robot* r2 = robot->allRobots->at(j);
+				if (r1->state != STOPPED && r2->state != STOPPED){ 
+					//std::cout << "checking for coupling: " << r1->name << " and " << r2->name << "\n";
+					if (r1->targetPose.Distance2D(r2->targetPose) <= 2*Rp){
+						//std::cout << "less than 2 Rp.. Grouping together\n";
+						if (r1->gpaCoupling < 0 && r2->gpaCoupling < 0){
+							//std::cout << "both negative values!\n";
+							r1->gpaCoupling = couplingId;
+							r2->gpaCoupling = couplingId;
+							couplingId++;
+						}else if (r1->gpaCoupling > 0){
+							r2->gpaCoupling = r1->gpaCoupling;
+						}else if (r2->gpaCoupling > 0){
+							r1->gpaCoupling = r2->gpaCoupling;
+						}
+						/*std::cout << "GPA Couplings:\n";
+						for (int k = 0; k < robot->allRobots->size(); k++){
+							std::cout << k << ": " << robot->allRobots->at(k)->gpaCoupling << "\n";
+						}*/
+					}
+				}
+			}
+		}
+	}
+	/*std::cout << "GPA Couplings:\n";
+	for (int i = 0; i < robot->allRobots->size(); i++){
+		std::cout << i << ": " << robot->allRobots->at(i)->gpaCoupling << "\n";
+	}*/
 
 	int geaCouplingId = 0;
 	switch(robot->state){

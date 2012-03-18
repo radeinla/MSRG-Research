@@ -29,21 +29,21 @@ msrg
 #  pose [ -2 15.3 0 0 ]
 )
 
-msrg
-(
-  name "msrg1"
-  pose [ -1 -1 0 180 ]
-)
+#msrg
+#(
+#  name "msrg1"
+#  pose [ -1 -1 0 180 ]
+#)
 
-msrg
-(
-  name "msrg2"
-  pose [ -1 1 0 0 ]
-)
+#msrg
+#(
+#  name "msrg2"
+#  pose [ -1 1 0 0 ]
+#)
 
-msrg
-(
-  name "msrg3"
-  pose [ 1 -1 0 0 ]
-)
+#msrg
+#(
+#  name "msrg3"
+#  pose [ 1 -1 0 0 ]
+#)
 
