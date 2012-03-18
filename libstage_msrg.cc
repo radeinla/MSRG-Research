@@ -200,11 +200,31 @@ class SRGNode{
 		}
 
 		bool isLSRCoupled(SRGNode* other){
-			for (int i = 0; i < other->lsrGlobalMapCoordinates.size(); i++){
+			for (int i = 0; i < lsrGlobalMapLinePoints.size(); i++){
+				for (int j = 0; j < other->lsrGlobalMapLinePoints.size(); j++){
+					int* lineCoordinates1 = lsrGlobalMapLinePoints[i];
+					int* lineCoordinates2 = other->lsrGlobalMapLinePoints[j];
+					//same y
+					if (lineCoordinates1[1] == lineCoordinates2[1]){
+						int x11 = lineCoordinates1[0];
+						int x12 = lineCoordinates1[2];
+						int x21 = lineCoordinates2[0];
+						int x22 = lineCoordinates2[2];
+						if (x12 >= x21 && x12 <= x22 ||
+							x22 >= x11 && x22 <= x12 ||
+							x11 <= x21 && x12 >= x22 ||
+							x21 <= x11 && x22 >= x12){
+							return true;
+						}
+					}
+				}
+			}
+			
+			/*for (int i = 0; i < other->lsrGlobalMapCoordinates.size(); i++){
 				if (binary_search(lsrGlobalMapCoordinates.begin(), lsrGlobalMapCoordinates.end(), other->lsrGlobalMapCoordinates[i], areCoordinatesSorted)){
 					return true;
 				}
-			}
+			}*/
 			return false;
 		}
 
@@ -309,18 +329,20 @@ class SRGNode{
 
 			for (int i = 0; i < ROBOT_MAP_HEIGHT; i++){
 				for (int j = 0; j < ROBOT_MAP_WIDTH; j++){
-					if (lsr(j,i) == BACKGROUND){
-						int j_start = j;
-						while (lsr(j,i) == BACKGROUND && j < ROBOT_MAP_WIDTH){
-							j++;
+					if (isValidXCoordinate(j) && isValidYCoordinate(i)){
+						if (lsr(j,i) == BACKGROUND){
+							int j_start = j;
+							while (lsr(j,i) == BACKGROUND && j < ROBOT_MAP_WIDTH){
+								j++;
+							}
+							int j_end = j-1;
+							int* lineCoordinates = new int[4];
+							lineCoordinates[0] = localMapXToGlobalMapCoordinateX(j_start);
+							lineCoordinates[1] = localMapYToGlobalMapCoordinateY(i);
+							lineCoordinates[2] = localMapXToGlobalMapCoordinateX(j_end);
+							lineCoordinates[3] = localMapYToGlobalMapCoordinateY(i);
+							lsrGlobalMapLinePoints.push_back(lineCoordinates);
 						}
-						int j_end = j-1;
-						int* lineCoordinates = new int[4];
-						lineCoordinates[0] = localMapXToGlobalMapCoordinateX(j_start);
-						lineCoordinates[1] = localMapYToGlobalMapCoordinateY(i);
-						lineCoordinates[2] = localMapXToGlobalMapCoordinateX(j_end);
-						lineCoordinates[3] = localMapYToGlobalMapCoordinateY(i);
-						lsrGlobalMapLinePoints.push_back(lineCoordinates);
 					}
 				}
 			}
@@ -346,18 +368,20 @@ class SRGNode{
 
 			for (int i = 0; i < ROBOT_MAP_HEIGHT; i++){
 				for (int j = 0; j < ROBOT_MAP_WIDTH; j++){
-					if (lsr(j,i) == FOREGROUND){
-						int j_start = j;
-						while (lsr(j,i) == FOREGROUND && j < ROBOT_MAP_WIDTH){
-							j++;
+					if (isValidXCoordinate(j) && isValidYCoordinate(i)){
+						if (lsr(j,i) == FOREGROUND){
+							int j_start = j;
+							while (lsr(j,i) == FOREGROUND && j < ROBOT_MAP_WIDTH){
+								j++;
+							}
+							int j_end = j-1;
+							int* lineCoordinates = new int[4];
+							lineCoordinates[0] = localMapXToGlobalMapCoordinateX(j_start);
+							lineCoordinates[1] = localMapYToGlobalMapCoordinateY(i);
+							lineCoordinates[2] = localMapXToGlobalMapCoordinateX(j_end);
+							lineCoordinates[3] = localMapYToGlobalMapCoordinateY(i);
+							lsrObstacleGlobalMapLinePoints.push_back(lineCoordinates);
 						}
-						int j_end = j-1;
-						int* lineCoordinates = new int[4];
-						lineCoordinates[0] = localMapXToGlobalMapCoordinateX(j_start);
-						lineCoordinates[1] = localMapYToGlobalMapCoordinateY(i);
-						lineCoordinates[2] = localMapXToGlobalMapCoordinateX(j_end);
-						lineCoordinates[3] = localMapYToGlobalMapCoordinateY(i);
-						lsrObstacleGlobalMapLinePoints.push_back(lineCoordinates);
 					}
 				}
 			}
@@ -482,10 +506,10 @@ class SRGNode{
 			store_lsr();
 			store_lsr_obstacles();
 
-//			std::cout << "Finished calculating lsr\n";
+			std::cout << "Finished calculating lsr\n";
 
-//			std::cout << "Showing lsr\n";
-//			lsr.display();
+			std::cout << "Showing lsr\n";
+			lsr.display();
 		}
 
 		void update_global_map(){
@@ -522,7 +546,7 @@ class SRGNode{
 				}
 			}*/
 
-			std::cout << "Finished updating global map\n";
+//			std::cout << "Finished updating global map\n";
 
 			std::cout << "Showing global map\n";
 			globalMap->display();
@@ -568,8 +592,8 @@ class SRGNode{
 
 //			std::cout << "Finished calculating lrr\n";
 
-//			std::cout << "Showing lrr\n";
-//			lrr.display();
+			std::cout << "Showing lrr\n";
+			lrr.display();
 		}
 
 		void calculate_lf(){
@@ -586,8 +610,8 @@ class SRGNode{
 			}
 //			std::cout << "Finished calculating lf\n";
 
-//			std::cout << "Showing lf\n";
-//			lf.display();
+			std::cout << "Showing lf\n";
+			lf.display();
 		}
 
 		void calculate_lir(){
@@ -630,8 +654,8 @@ class SRGNode{
 
 //			std::cout << "Finished calculating lir\n";
 
-//			std::cout << "Showing lir\n";
-//			lir.display();
+			std::cout << "Showing lir\n";
+			lir.display();
 
 		}
 
@@ -859,6 +883,7 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 				int j = i+1;
 				while (j < sensors.size() && sensors[j].fov == 0){
 					if (sensors[j].ranges[0] < perception){
+						std::cout << "Found an obstacle!\n";
 						perception = sensors[j].ranges[0];
 					}
 					j++;
@@ -869,7 +894,7 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 				fov.push_back(HumanAngle(sensors[i].fov));
 			}
 		}
-//		std::cout << "Processed " << q << " readings\n";
+		std::cout << "Processed " << q << " readings\n";
 
 		SRGNode* currentNode;
 
@@ -923,7 +948,7 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 		std::cout << "Iterations done: " << robot->iterations << "\n";
 
 		if (robot->iterations%100 == 0){
-			robot->map.display();
+			//robot->map.display();
 		}
 		//robot->map.display();
 		robot->master = false;
@@ -942,7 +967,7 @@ int PositionUpdate( ModelPosition* model, Robot* robot ){
 			if (robot->current->parent == NULL){
 				std::cout << robot->name << " is back at starting position, stopping because no more LIR!!!!\n";
 				robot->state = STOPPED;
-				robot->map.display();
+				//robot->map.display();
 				return 0;
 			}else{
 				std::cout << "Backtracking to parent..\n";
@@ -1233,7 +1258,7 @@ class MSRG{
 							current = current->children[0];
 						}
 					}
-					robots[i]->map.display();
+					//robots[i]->map.display();
 				}
 				displayedResults = true;
 			}

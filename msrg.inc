@@ -828,7 +828,8 @@ define msrg position
 
   msrg_sensor_array( pose [0 0 -0.03 0] )
 
-  obstacle_return 1.0
-  ranger_return 1.0
+  size [0.3 0.3 0.2]
+  obstacle_return 1
+  ranger_return 1
 )
 
